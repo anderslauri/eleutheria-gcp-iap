@@ -18,7 +18,7 @@ For more detailed information about ID-Token and Self Signed JWT, please referen
   Value of annotation key is equal to respective identifier. Annotation is used by service to query group for membership in Google Workspace.
 
 ## Forwarded Headers
-The following headers are required to complete integrity validation of JWT and membership validation of group in Google Workspace.
+The following headers are required to complete integrity and signature validation of JWT and membership validation in Google Workspace group.
 
 ### Authentication
 One of `X-Forwarded-Authorization` or `X-Forwarded-Proxy-Authorization` must be present. If `X-Forwarded-Proxy-Authorization` is found `X-Forwarded-Authorization` is ignored.
