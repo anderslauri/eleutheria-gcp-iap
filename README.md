@@ -35,7 +35,7 @@ The following permissions are required.
 Google service account must have, atleast, prebuilt administrative role `Group Reader` in Google Workspace. Please reference [Google Workspace Administrator Roles][Google Workspace Administrator Roles] for more information.
 
 ### Kubernetes
-Kubernetes service account must have cluster wide list/get rbac-bindings for the following resources in Kubernetes:
+Kubernetes service account must have cluster wide rbac-bindings `list` and `get` for the following resources in Kubernetes:
 
 - `namespace`
 - `ingresses`
