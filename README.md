@@ -35,6 +35,15 @@ The following permissions are required.
 ### Google Workspace
 Google service account must have, atleast, prebuilt administrative role `Group Reader` in Google Workspace. Please reference [Google Workspace Administrator Roles][Google Workspace Administrator Roles] for more information.
 
+
+## Endpoints 
+
+### /auth (GET)
+Primary authentication endpoint.
+
+### /healthz (GET)
+Use by Kubernetes health for liveness and readiness. Possible return codes `200 OK` or `500 Internal Server Error`. No parameters required.
+
 ### Kubernetes
 Kubernetes service account must have cluster wide list/get rbac-bindings for the following resources in Kubernetes:
 
