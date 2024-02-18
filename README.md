@@ -4,7 +4,7 @@ Authenticaton service, i.e. used by `nginx` or `traefik` in Kubernetes verifies 
 - `ID-Token`
 - `Self Signed JWT`
 
-For more detailed information about ID-Token and Self Signed JWT, please reference [Google Cloud Token Types][Google Cloud Token Types]. Authentication (inc. verification of integrity and validity) is done accordingly to the following steps.
+For more detailed information about ID-Token and Self Signed JWT, please reference [Google Cloud Token Types][Google Cloud Token Types]. Authentication (inc. verification of integrity and validity of JWT) is done accordingly to the following steps.
 
 1. Signtature verification through `JWKS`. Endpoint for `JWKS` is identified automatically given type of JWT.
 2. `iat` and `exp` claim verification. Please note. Allowed clock skew is 30 seconds, meaning, `iat - <30 seconds>` and `exp + <30 seconds>`.
