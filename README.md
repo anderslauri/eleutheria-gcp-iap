@@ -11,23 +11,22 @@ For more detailed information about ID-Token and Self Signed JWT, please referen
 3. `aud` verification based on forwarded header of original requested url.
 4. Membership query (in Google Workspace) given value of `gws.membership` annotation for matching ingress.
 
-`{1..3}` follow [JWT-verification as described by Google Cloud][JWT-Verification]. In case of successful authentication `200 OK` is returned - else `407 Proxy Authentication Required`.
+`{1..3}` follow [JWT-verification as described by Google Cloud][JWT-Verification].
 
 ## Required Ingress Annotation
 - `gws.membership/<id|name|email>`. Please reference [Google Workspace Groups API][Google Workspace Groups API] for detailed description when to use `id`, `name` or `email`.
   Value of annotation key is equal to respective identifier. Annotation is used by service to query group for membership in Google Workspace.
 
 ## Forwarded Headers
-The following headers are required to complete authentication.
+The following headers are required to complete integrity validation of JWT and membership validation of group in Google Workspace.
 
 ### Authentication
 One of `X-Forwarded-Authorization` or `X-Forwarded-Proxy-Authorization` must be present. If `X-Forwarded-Proxy-Authorization` is found `X-Forwarded-Authorization` is ignored.
 This logic follows [programmatic authentication by Identity Aware Proxy][Programmatic Authentication]. These headers are not configurable.
 
-### URI
-This header is configurable. Per default resolution is completed given `nginx` controller.
-
+### Host and protocol
 - Request URI resolves to header `X-Original-URI`.
+- Request protocol resolves to header `X-Scheme`.
 
 ## Required Permissions
 The following permissions are required.
@@ -44,10 +43,14 @@ Kubernetes service account must have cluster wide list/get rbac-bindings for the
 ## Endpoints 
 
 ### /auth (GET)
-Primary authentication endpoint.
+Primary authentication endpoint. Return code `200 OK` given successful verification and integrity validation of JWT and membership in Google Workspace group, else `407 Proxy Authentication Required`. No body is returned.
+
+#### Parameters
+1. `X-Forwarded-Authorization` or `X-Forwarded-Proxy-Authorization`.
+2. `X-Original-URI` and `X-Scheme` must be present.
 
 ### /healthz (GET)
-Use by Kubernetes health for liveness and readiness. Possible return codes `200 OK` or `500 Internal Server Error`. No parameters required.
+Kubernetes health endpoint for liveness and readiness. Return code `200 OK` with no body.
 
 [Google Workspace Groups API]: <https://developers.google.com/admin-sdk/directory/reference/rest/v1/groups> "Google Workspace Groups API"
 [Google Workspace Administrator Roles]: <https://support.google.com/a/answer/2405986> "Google Workspace Administrator Roles"
