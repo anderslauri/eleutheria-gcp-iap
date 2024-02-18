@@ -8,10 +8,10 @@ For more detailed information about ID-Token and Self Signed JWT, please referen
 
 1. Signtature verification through `JWKS`. Endpoint for `JWKS` is identified automatically given type of JWT.
 2. `iat` and `exp` claim verification. Please note. Allowed clock skew is 30 seconds, meaning, `iat - <30 seconds>` and `exp + <30 seconds>`.
-3. `aud` verification based on forwarded url.
-4. Google Workspace membership query given value of `gws.membership` annotation for matching ingress.
+3. `aud` verification based on forwarded header of original requested url.
+4. Membership query (in Google Workspace) given value of `gws.membership` annotation for matching ingress.
 
-`{1..3}` follow [JWT-verification as described by Google Cloud][JWT-Verification].
+`{1..3}` follow [JWT-verification as described by Google Cloud][JWT-Verification]. In case of successful authentication `200 OK` is returned - else `407 Proxy Authentication Required`.
 
 ## Required Ingress Annotation
 - `gws.membership/<id|name|email>`. Please reference [Google Workspace Groups API][Google Workspace Groups API] for detailed description when to use `id`, `name` or `email`.
