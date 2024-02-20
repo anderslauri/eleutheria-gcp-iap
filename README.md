@@ -52,7 +52,7 @@ Primary authentication endpoint. Return code `200 OK` given successful verificat
 ### /healthz (GET)
 Kubernetes health endpoint for liveness and readiness. Return code `200 OK` with no body.
 
-### Caching
+## Caching
 Multiple layers of caching exist to enhance throughput.
 
 1. JWK-caching. Read frequently, changed seldom. Using `Copy on Write` cache for self-signed JWT,
