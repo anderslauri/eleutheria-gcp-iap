@@ -6,7 +6,7 @@ Authenticaton service, i.e. used by `nginx` or `traefik` in Kubernetes verifies 
 
 For more detailed information about ID-Token and Self Signed JWT, please reference [Google Cloud Token Types][Google Cloud Token Types]. Authentication (inc. verification of integrity and validity of JWT) is done accordingly to the following steps.
 
-1. Signtature verification through `JWKS`. Endpoint for `JWKS` is identified automatically given type of JWT.
+1. Signature verification through `JWKS`. Endpoint for `JWKS` is identified automatically given type of JWT.
 2. `iat` and `exp` claim verification. Please note. Allowed clock skew is 30 seconds, meaning, `iat - <30 seconds>` and `exp + <30 seconds>`.
 3. `aud` verification based on forwarded header of original requested url.
 4. Membership query (in Google Workspace) given value of `gws.membership` annotation for matching ingress.
@@ -51,6 +51,21 @@ Primary authentication endpoint. Return code `200 OK` given successful verificat
 
 ### /healthz (GET)
 Kubernetes health endpoint for liveness and readiness. Return code `200 OK` with no body.
+
+### Caching
+Multiple layers of caching exist to enhance throughput.
+
+1. JWK-caching. Read frequently, changed seldom. Using `Copy on Write` cache for self-signed JWT,
+   `Atomic.Value` keeps JWK from `accounts.google.com` in memory. Loaded on startup. Cleaning is done
+    every one hour, if item count is above 500.
+2. JWT-caching. Read frequently, changed frequently. Utilize `Sync.Map` with cleaning routine,
+   `ttl` is `exp` of token minus routine interval. Only hash of token is kept. No reason else.
+3. Ingress-caching. Read frequently, changed seldom. Using `Copy on Write` cache. No cleaning,
+   if new ingress is detected with annotation. Recreate cache from all ingresses.
+4. GWS-caching. Authorization caching, read frequently and changed frequently. Utilize `Sync.Map`,
+   only kept in memory for 30min after request to query per user to GWS.
+
+MemoryStore? Yes, should be easy. It's an interface implementation.
 
 [Google Workspace Groups API]: <https://developers.google.com/admin-sdk/directory/reference/rest/v1/groups> "Google Workspace Groups API"
 [Google Workspace Administrator Roles]: <https://support.google.com/a/answer/2405986> "Google Workspace Administrator Roles"

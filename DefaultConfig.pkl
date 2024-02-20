@@ -1,0 +1,11 @@
+amends "pkl/Application.pkl"
+
+cache {
+  enabled = true
+  ttl     = 10.min
+}
+
+headerMapping {
+  scheme = "X-Scheme"
+  uri    = "X-Original-URI"
+}

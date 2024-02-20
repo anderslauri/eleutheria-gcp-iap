@@ -1,0 +1,30 @@
+@go.Package { name = "github.com/anderslauri/k8s-gws-authn/pkl/gen" }
+module ApplicationConfig
+
+import "package://pkg.pkl-lang.org/pkl-go/pkl.golang@0.5.3#/go.pkl"
+
+// Property type definitions.
+typealias Port     = UInt16(this > 0)
+typealias Host     = String(!isEmpty)
+typealias LogLevel = "INFO"|"WARNING"|"DEBUG"|"ERROR"|"TRACE"
+typealias Header   = String(!isEmpty)
+typealias TTL      = Duration(this > 60.s)
+
+// Default properties.
+host: Host         = "0.0.0.0"
+port: Port         = 8080
+logLevel: LogLevel = "DEBUG"
+
+// Application configuration definition.
+cache: Cache
+headerMapping: HeaderMapping
+
+class Cache {
+  enabled: Boolean
+  ttl: TTL
+}
+
+class HeaderMapping {
+  scheme: Header
+  uri: Header
+}
