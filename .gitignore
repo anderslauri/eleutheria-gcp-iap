@@ -21,3 +21,4 @@ pkl/gen
 
 # Go workspace file
 go.work
+go.sum
