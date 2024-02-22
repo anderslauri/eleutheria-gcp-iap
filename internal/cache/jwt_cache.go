@@ -1,4 +1,4 @@
-package internal
+package cache
 
 import (
 	"context"
@@ -9,9 +9,7 @@ import (
 )
 
 type jwtCacheVal struct {
-	// We don't need to store the entire token,
-	// it is sufficient to store hash of token.
-	val []byte
+	val any
 	exp int64
 }
 
@@ -28,10 +26,10 @@ func NewJwtCache(ctx context.Context) *jwtCache {
 }
 
 // Set write content to jwt cache.
-func (j *jwtCache) Set(param *CacheParams) {
-	j.cache.Swap(param.key, &jwtCacheVal{
-		val: param.val.([]byte),
-		exp: param.ttl,
+func (j *jwtCache) Set(param *Params) {
+	j.cache.Swap(param.Key, &jwtCacheVal{
+		val: param.Val,
+		exp: param.TTL,
 	})
 }
 
@@ -50,7 +48,8 @@ func (j *jwtCache) Read(key string, w io.Writer) bool {
 	if !ok {
 		return false
 	}
-	_, _ = w.Write(val.(*jwtCacheVal).val)
+	byteSlice, _ := val.(*jwtCacheVal).val.([]byte)
+	_, _ = w.Write(byteSlice)
 	return true
 }
 

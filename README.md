@@ -1,5 +1,5 @@
-# Kubernetes Google Workspace Authentication
-Authenticaton service, i.e. used by `nginx` or `traefik` in Kubernetes verifies JWT, issued by Google Cloud Platform, subject has membership of specified group in Google Workspace. The following types of JWT are supported:
+# Open Identity Aware Proxy for Google Cloud
+Authentication service/proxy, i.e. used by `nginx` or `traefik` in Kubernetes verifies JWT, issued by Google Cloud Platform, subject has membership of specified group in Google Workspace (or within project). The following types of JWT are supported:
 
 - `ID-Token`
 - `Self Signed JWT`
@@ -13,9 +13,12 @@ For more detailed information about ID-Token and Self Signed JWT, please referen
 
 `{1..3}` follow [JWT-verification as described by Google Cloud][JWT-Verification].
 
-## Required Ingress Annotation
-- `gws.membership/<id|name|email>`. Please reference [Google Workspace Groups API][Google Workspace Groups API] for detailed description when to use `id`, `name` or `email`.
-  Value of annotation key is equal to respective identifier. Annotation is used by service to query group for membership in Google Workspace.
+## What about the name?
+What about it?
+
+## Role bindings in Google Cloud
+
+Access is managed via role bindings in project where Google Service Account running the service is present.
 
 ## Forwarded Headers
 The following headers are required to complete integrity and signature validation of JWT and membership validation in Google Workspace group.
@@ -26,7 +29,6 @@ This logic follows [programmatic authentication by Identity Aware Proxy][Program
 
 ### Host and protocol
 - Request URI resolves to header `X-Original-URI`.
-- Request protocol resolves to header `X-Scheme`.
 
 ## Required Permissions
 The following permissions are required.
@@ -34,11 +36,7 @@ The following permissions are required.
 ### Google Workspace
 Google service account must have, atleast, prebuilt administrative role `Group Reader` in Google Workspace. Please reference [Google Workspace Administrator Roles][Google Workspace Administrator Roles] for more information.
 
-### Kubernetes
-Kubernetes service account must have cluster wide rbac-bindings `list` and `get` for the following resources in Kubernetes:
-
-- `namespace`
-- `ingresses`
+### Google Workspace
 
 ## Endpoints 
 

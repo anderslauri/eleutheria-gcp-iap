@@ -5,15 +5,15 @@ import (
 	"errors"
 	"fmt"
 	"github.com/MicahParks/keyfunc/v3"
+	"github.com/anderslauri/k8s-gws-authn/internal/cache"
 	"github.com/golang-jwt/jwt/v5"
 	log "github.com/sirupsen/logrus"
 	"io"
 	"net/http"
+	"sync"
+	"sync/atomic"
 	"time"
 )
-
-// TokenType is a custom type definition for types of Google tokens which are supported.
-type TokenType string
 
 const (
 	googleIdToken           TokenType = "Id Token"
@@ -23,6 +23,43 @@ const (
 	selfSignedCertsPrefix             = "https://www.googleapis.com/service_accounts/v1/jwk/"
 	publicGoogleCertsIssuer           = "https://accounts.google.com"
 )
+
+// GoogleTokenService is a backend representation to manage authn/authz of Google Tokens.
+type GoogleTokenService struct {
+	jwkClient http.Client
+	once      sync.Once
+	jwkSet    cache.Cache
+	// keyFunc for issuer accounts.google.com - most commonly used.
+	publicKeyFunc atomic.Value
+}
+
+// GoogleTokenClaims extends JWT with email claim.
+type GoogleTokenClaims struct {
+	Email string `json:"email"`
+	jwt.RegisteredClaims
+}
+
+// GoogleToken is an implementation of Token interface.
+type GoogleToken struct {
+	aud    string
+	email  string
+	issuer string
+	iat    time.Time
+	exp    time.Time
+	typeOf TokenType
+}
+
+// Token interface for Token relevant functions, GoogleToken being implementation of Token.
+type Token interface {
+	Email() string
+	Audience() string
+	String() string
+	Issuer() string
+	Type() TokenType
+}
+
+// TokenType is a custom type definition for types of Google tokens which are supported.
+type TokenType string
 
 var (
 	// ErrUnknownTokenType is given when no error is present, however, token type is not identifiable.
@@ -36,7 +73,7 @@ var (
 )
 
 // NewGoogleTokenService creates a new token service for Google Tokens.
-func NewGoogleTokenService(ctx context.Context, jwkCache Cache) (*GoogleTokenService, error) {
+func NewGoogleTokenService(ctx context.Context, jwkCache cache.Cache) (*GoogleTokenService, error) {
 	googleTokenService := &GoogleTokenService{
 		jwkSet: jwkCache,
 	}
@@ -132,22 +169,24 @@ func (t *GoogleTokenService) keyFunc(ctx context.Context, issuer string) (keyfun
 		} else if keySet, err = keyfunc.NewJWKSetJSON(buf.Bytes()); err != nil {
 			return nil, ErrMissingJWK
 		}
-		// Update catch to ensure we avoid RTT to Google API.
-		params := getCacheParams()
-		defer putCacheParams(params)
-		params.key = issuer
-		params.val = buf.Bytes()
-		t.jwkSet.Set(params)
+		// Avoid making this non-blocking.
+		go func(issuer string, val []byte) {
+			params := cache.GetParams()
+			defer cache.PutParams(params)
+			params.Key = issuer
+			params.Val = val
+			t.jwkSet.Set(params)
+		}(issuer, buf.Bytes())
 		return keySet.(keyfunc.Keyfunc), nil
 	}
 	return keySet.(keyfunc.Keyfunc), nil
 }
 
-// NewGoogleToken transform base64 encoded token string into a GoogleToken representation,
-// performs both claim assertion and verification that token is properly signed by Google.
+// NewGoogleToken transform base64 encoded token string into a GoogleToken representation, performs both claim
+// assertion and verification that token is properly signed by Google or, by Google Service Account, JWK.
 func (t *GoogleTokenService) NewGoogleToken(ctx context.Context, tokenString string, googleToken *GoogleToken) error {
 	var issuer string
-	// Identify issuer of token.
+	// Identify issuer of token. This is a first pass - probably this should be optimized away.
 	token, _, err := new(jwt.Parser).ParseUnverified(tokenString, jwt.MapClaims{})
 	if err != nil {
 		return err
@@ -161,9 +200,8 @@ func (t *GoogleTokenService) NewGoogleToken(ctx context.Context, tokenString str
 	if err != nil {
 		return err
 	}
-	// Parse token with claims. Defer with JWK signature validation
-	// until we can tell if this a
-	if token, err := jwt.ParseWithClaims(tokenString, tokenClaims, keySet.Keyfunc, jwt.WithLeeway(defaultLeeway)); err != nil {
+	if token, err := jwt.ParseWithClaims(tokenString, tokenClaims, keySet.Keyfunc,
+		jwt.WithLeeway(defaultLeeway)); err != nil {
 		return err
 	} else if claims, ok := token.Claims.(*GoogleTokenClaims); ok && token.Valid {
 		// Ensure claim email and aud is present. Also set defined

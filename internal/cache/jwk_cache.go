@@ -1,4 +1,4 @@
-package internal
+package cache
 
 import (
 	"context"
@@ -104,7 +104,7 @@ func (j *jwkCache) delete(keys map[string]struct{}) {
 }
 
 // Set writes new entry in JWK-cache.
-func (j *jwkCache) Set(param *CacheParams) {
+func (j *jwkCache) Set(param *Params) {
 	j.mutex.Lock()
 	defer j.mutex.Unlock()
 	orgCache, _ := j.cache.Load().(jwkCacheType)
@@ -115,8 +115,8 @@ func (j *jwkCache) Set(param *CacheParams) {
 	for k, v := range orgCache {
 		newCache[k] = v
 	}
-	newCache[param.key] = jwkCacheVal{
-		jwk: param.val,
+	newCache[param.Key] = jwkCacheVal{
+		jwk: param.Val,
 		wts: time.Now().Unix(),
 	}
 	j.cache.Store(newCache)

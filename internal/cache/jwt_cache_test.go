@@ -1,4 +1,4 @@
-package internal
+package cache
 
 import (
 	"bytes"
@@ -7,54 +7,52 @@ import (
 	"time"
 )
 
-func TestJwkCacheWriteAndRead(t *testing.T) {
+func TestJwtCacheWriteAndRead(t *testing.T) {
 	var (
 		key = "test"
 		val = []byte{'a', 'b', 'c'}
 	)
-	cache := NewJwkCache(context.Background())
-	cache.Set(&CacheParams{
-		key: key,
-		val: val,
+	cache := NewJwtCache(context.Background())
+	cache.Set(&Params{
+		Key: key,
+		Val: val,
 	})
 	if cacheVal, ok := cache.Get(key); !ok || !bytes.Equal(val, cacheVal.([]byte)) {
 		t.Fatal("Expected value to be found in cache.")
 	}
 }
 
-func TestJwkCacheCleanerRoutine(t *testing.T) {
+func TestJwtCacheCleanerRoutine(t *testing.T) {
 	var key = "test"
 
-	cache := &jwkCache{
-		minLen: 0,
-		ttl:    0,
-	}
-	cache.Set(&CacheParams{
-		key: key,
-		val: []byte{},
+	cache := &jwtCache{}
+	go cache.cleaner(context.Background(), 1*time.Second)
+
+	cache.Set(&Params{
+		Key: key,
+		TTL: time.Now().Unix(),
+		Val: []byte{},
 	})
-	go cache.cleaner(context.Background(), 50*time.Millisecond)
 	for i := 0; i < 10; i++ {
 		if _, ok := cache.Get(key); !ok {
 			return
 		}
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(1 * time.Second)
 	}
 	t.Fatal("Expected entry to be purged from cache.")
 }
 
-func TestJwkWriteAndReadFromCache(t *testing.T) {
+func TestJwtWriteAndReadFromCache(t *testing.T) {
 	var (
 		key = "test"
 		val = []byte{'a', 'b', 'c'}
 	)
-	cache := NewJwkCache(context.Background())
-	cache.Set(&CacheParams{
-		key: key,
-		val: val,
+	cache := NewJwtCache(context.Background())
+	cache.Set(&Params{
+		Key: key,
+		Val: val,
 	})
-	buf := getBuffer()
-	defer putBuffer(buf)
+	buf := &bytes.Buffer{}
 
 	if ok := cache.Read(key, buf); !ok {
 		t.Fatal("Expected value to be found in cache.")

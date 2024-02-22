@@ -5,14 +5,6 @@ import (
 	"sync"
 )
 
-// Pooling for memory reuse.
-
-var cacheParamPool = sync.Pool{
-	New: func() interface{} {
-		return &CacheParams{}
-	},
-}
-
 var bufPool = sync.Pool{
 	New: func() interface{} {
 		buf := &bytes.Buffer{}
@@ -64,15 +56,4 @@ func getBuffer() *bytes.Buffer {
 func putBuffer(buf *bytes.Buffer) {
 	buf.Reset()
 	bufPool.Put(buf)
-}
-
-func getCacheParams() *CacheParams {
-	return cacheParamPool.Get().(*CacheParams)
-}
-
-func putCacheParams(param *CacheParams) {
-	param.ttl = 0
-	param.key = ""
-	param.val = nil
-	cacheParamPool.Put(param)
 }

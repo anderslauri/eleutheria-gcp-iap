@@ -1,64 +1,34 @@
 package internal_test
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
-	"errors"
 	"github.com/anderslauri/k8s-gws-authn/internal"
+	"github.com/anderslauri/k8s-gws-authn/internal/cache"
 	"golang.org/x/oauth2/google"
-	"io"
-	"net/http"
-	"net/url"
+	"google.golang.org/api/idtoken"
+	"google.golang.org/api/option"
 	"testing"
 )
 
-// GoogleCloudCredentialsOAuthConfig used to retrieve ID-tokens for normal user account.
-type GoogleCloudCredentialsOAuthConfig struct {
-	ClientID     string `json:"client_id"`
-	ClientSecret string `json:"client_secret"`
-	RefreshToken string `json:"refresh_token"`
-	GrantType    string `json:"grant_type"`
-}
-
-// GoogleCloudTokenResponse is the response struct from Google API when requesting ID-token,
-// other fields are included also but we only care about the id-token from this response.
-type GoogleCloudTokenResponse struct {
-	IdToken string `json:"id_token"`
-}
-
-// requestUserGoogleIdToken calls Google API for existing local user (via ADC) and retrieves an ID-token,
-// only used for verifying token generation function. Audience can only be set by using a Google Service Account.
-func requestUserGoogleIdToken(ctx context.Context) (string, error) {
+// requestUserGoogleIdToken calls Google API for user (via ADC) and retrieves an ID-token.
+func requestUserGoogleIdToken(ctx context.Context, aud string) (string, error) {
 	credentials, err := google.FindDefaultCredentials(ctx)
 	if err != nil {
 		return "", err
 	}
-	clientConfig := &GoogleCloudCredentialsOAuthConfig{
-		GrantType: "refresh_token",
-	}
-
-	_ = json.Unmarshal(credentials.JSON, &clientConfig)
-	clientRequestBody, _ := json.Marshal(clientConfig)
-
-	rURL, _ := url.Parse("https://oauth2.googleapis.com/token")
-	httpReq := &http.Request{URL: rURL, Method: "POST", Body: io.NopCloser(bytes.NewReader(clientRequestBody))}
-
-	rsp, err := httpClient.Do(httpReq)
+	tokenSource, err := idtoken.NewTokenSource(ctx, aud, option.WithCredentials(credentials))
 	if err != nil {
 		return "", err
-	} else if rsp.StatusCode != http.StatusOK {
-		return "", errors.New("non expected return status code from googleapis")
 	}
-	defer rsp.Body.Close()
-	body, _ := io.ReadAll(rsp.Body)
-	googleResponseBody := &GoogleCloudTokenResponse{}
-	_ = json.Unmarshal(body, &googleResponseBody)
-	return googleResponseBody.IdToken, nil
+	serviceAccountIdToken, err := tokenSource.Token()
+	if err != nil {
+		return "", err
+	}
+	return serviceAccountIdToken.AccessToken, nil
 }
 
 func newTokenService(ctx context.Context) (*internal.GoogleTokenService, error) {
-	jwkCache := internal.NewJwkCache(ctx)
+	jwkCache := cache.NewJwkCache(ctx)
 	tokenService, err := internal.NewGoogleTokenService(ctx, jwkCache)
 	if err != nil {
 		return nil, err
@@ -71,7 +41,7 @@ func TestNewGoogleTokenGeneration(t *testing.T) {
 	defer cancel()
 
 	tokenService, _ := newTokenService(ctx)
-	idToken, _ := requestUserGoogleIdToken(ctx)
+	idToken, _ := requestUserGoogleIdToken(ctx, "https://myurl.com")
 	token := &internal.GoogleToken{}
 
 	if err := tokenService.NewGoogleToken(ctx, idToken, token); err != nil {
@@ -85,7 +55,7 @@ func BenchmarkNewGoogleTokenService(b *testing.B) {
 
 	token := &internal.GoogleToken{}
 	tokenService, _ := newTokenService(ctx)
-	idToken, _ := requestUserGoogleIdToken(ctx)
+	idToken, _ := requestUserGoogleIdToken(ctx, "https://myurl.com")
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {

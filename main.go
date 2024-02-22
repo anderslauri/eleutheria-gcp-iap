@@ -11,7 +11,7 @@ import (
 
 const (
 	defaultConfigFile     = "DefaultConfig.pkl"
-	envVariableConfigFile = "GWS_AUTH_CONFIG_FILE"
+	envVariableConfigFile = "APPLICATION_CONFIG_FILE"
 )
 
 func main() {
@@ -40,7 +40,7 @@ func main() {
 	}
 	log.Info("Application configuration successfully loaded.")
 
-	listener, err := internal.NewListener(ctx, cfg.Host, cfg.HeaderMapping.Scheme, cfg.HeaderMapping.Uri, cfg.Port)
+	listener, err := internal.NewListener(ctx, cfg.Host, cfg.HeaderMapping.Uri, cfg.Port)
 	if err != nil {
 		log.WithField("error", err).Fatalf("Not possible to start listener.")
 	}
