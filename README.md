@@ -12,12 +12,15 @@ For more detailed information about ID-Token and Self Signed JWT, please referen
 4. Role `roles/iap.httpsResourceAccessor` is verified given email of JWT. Either directly as role binding in project
    or indirectly via membership in group in `Google Workspace`.
 
-`{1..3}` follow [JWT-verification as described by Google Cloud][JWT-Verification]. This is an open source implementation
-of `Identity Aware Proxy` by Google.
+`{1..3}` follow [JWT-verification as described by Google Cloud][JWT-Verification].
 
-## Required role bindings in Google Cloud
-`roles/iap.httpsResourceAccessor` is required a role binding in project, either directly via email or indirect via
-membership in group in `Google Workspace`. Conditional expressions are supported given scope of `Identity Aware Proxy`.
+## Authentication and authorization management
+Following `Identity Aware Proxy`. Access is managed using role `roles/iap.httpsResourceAccessor` in project, 
+either directly via email or indirect via membership in group in `Google Workspace`. Conditional expressions are supported given scope of `Identity Aware Proxy`.
+
+### Conditional expressions
+`request.path`, `request.host` and `request.time` are supported in conditional expressions. These expressions are compiled in memory
+and validated against the parameters as provided through the `/auth`-endpoint.
 
 ## Forwarded Headers
 The following headers are required for `/auth`-endpoint.
@@ -31,10 +34,7 @@ This logic follows [programmatic authentication by Identity Aware Proxy][Program
 
 ## Required Permissions Google Service Account
 Google service account must have enough permissions to retrieve all policy bindings within the project, also `Admin SDK`
-must be enabled on the project to enable access to Google Workspace.
-
-### Google Workspace
-Google service account must have, atleast, prebuilt administrative role `Group Reader` in Google Workspace. Please reference [Google Workspace Administrator Roles][Google Workspace Administrator Roles] for more information.
+must be enabled on the project to enable access to Google Workspace. Please reference [Google Workspace Administrator Roles][Google Workspace Administrator Roles].
 
 ## Endpoints 
 
