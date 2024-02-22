@@ -14,6 +14,10 @@ For more detailed information about ID-Token and Self Signed JWT, please referen
 
 `{1..3}` follow [JWT-verification as described by Google Cloud][JWT-Verification].
 
+## How to run
+
+TBD
+
 ## Authentication and authorization management
 Following `Identity Aware Proxy`. Access is managed using role `roles/iap.httpsResourceAccessor` in project, 
 either directly via email or indirect via membership in group in `Google Workspace`. Conditional expressions are supported given scope of `Identity Aware Proxy`.
@@ -47,6 +51,11 @@ Primary authentication endpoint. Return code `200 OK` given successful verificat
 
 ### /healthz (GET)
 Kubernetes health endpoint for liveness and readiness. Return code `200 OK` with no body.
+
+## Technical Debt
+- Only role bindings on a project level is taken into consideration. Folders and organization must be supported.
+- Clean up `TODO` comments.
+- Append support for reverse proxy.
 
 [Google Workspace Groups API]: <https://developers.google.com/admin-sdk/directory/reference/rest/v1/groups> "Google Workspace Groups API"
 [Google Workspace Administrator Roles]: <https://support.google.com/a/answer/2405986> "Google Workspace Administrator Roles"
