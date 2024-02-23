@@ -12,7 +12,7 @@ func TestJwkCacheWriteAndRead(t *testing.T) {
 		key = "test"
 		val = []byte{'a', 'b', 'c'}
 	)
-	cache := NewJwkCache(context.Background())
+	cache := NewJwkCache(context.Background(), 100, 5*time.Minute)
 	cache.Set(&Params{
 		Key: key,
 		Val: val,
@@ -25,15 +25,12 @@ func TestJwkCacheWriteAndRead(t *testing.T) {
 func TestJwkCacheCleanerRoutine(t *testing.T) {
 	var key = "test"
 
-	cache := &jwkCache{
-		minLen: 0,
-		ttl:    0,
-	}
+	cache := &jwkCache{}
 	cache.Set(&Params{
 		Key: key,
 		Val: []byte{},
 	})
-	go cache.cleaner(context.Background(), 50*time.Millisecond)
+	go cache.cleaner(context.Background(), 1, 50*time.Millisecond, 0)
 	for i := 0; i < 10; i++ {
 		if _, ok := cache.Get(key); !ok {
 			return
@@ -48,7 +45,7 @@ func TestJwkWriteAndReadFromCache(t *testing.T) {
 		key = "test"
 		val = []byte{'a', 'b', 'c'}
 	)
-	cache := NewJwkCache(context.Background())
+	cache := NewJwkCache(context.Background(), 100, 5*time.Minute)
 	cache.Set(&Params{
 		Key: key,
 		Val: val,

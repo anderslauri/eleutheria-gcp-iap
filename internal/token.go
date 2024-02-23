@@ -5,12 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"github.com/MicahParks/keyfunc/v3"
-	"github.com/anderslauri/k8s-gws-authn/internal/cache"
+	"github.com/anderslauri/open-iap/internal/cache"
 	"github.com/golang-jwt/jwt/v5"
 	log "github.com/sirupsen/logrus"
 	"io"
 	"net/http"
-	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -27,7 +26,6 @@ const (
 // GoogleTokenService is a backend representation to manage authn/authz of Google Tokens.
 type GoogleTokenService struct {
 	jwkClient http.Client
-	once      sync.Once
 	jwkSet    cache.Cache
 	// keyFunc for issuer accounts.google.com - most commonly used.
 	publicKeyFunc atomic.Value
@@ -49,15 +47,6 @@ type GoogleToken struct {
 	typeOf TokenType
 }
 
-// Token interface for Token relevant functions, GoogleToken being implementation of Token.
-type Token interface {
-	Email() string
-	Audience() string
-	String() string
-	Issuer() string
-	Type() TokenType
-}
-
 // TokenType is a custom type definition for types of Google tokens which are supported.
 type TokenType string
 
@@ -73,12 +62,12 @@ var (
 )
 
 // NewGoogleTokenService creates a new token service for Google Tokens.
-func NewGoogleTokenService(ctx context.Context, jwkCache cache.Cache) (*GoogleTokenService, error) {
+func NewGoogleTokenService(ctx context.Context, jwkCache cache.Cache, refreshCertsInterval time.Duration) (*GoogleTokenService, error) {
 	googleTokenService := &GoogleTokenService{
 		jwkSet: jwkCache,
 	}
 	// Load initial public certificates before starting.
-	err := googleTokenService.googleCertsRefresher(ctx, 10*time.Minute)
+	err := googleTokenService.googleCertsRefresher(ctx, refreshCertsInterval)
 	if err != nil {
 		return nil, err
 	}
@@ -117,33 +106,30 @@ func (t *GoogleTokenService) googleCertsRefresher(ctx context.Context, interval 
 	if err != nil {
 		return err
 	}
-	// Store key set in atomic.Value. Most common scenario.
-	t.publicKeyFunc.Store(keySet)
-	// Background routine for cache refresh of JWK for public certs.
 	log.Info("Public certificates successfully loaded. Persisting in cache.")
-	t.once.Do(func() {
+	t.publicKeyFunc.Store(keySet)
+	// Listener to ensure public certificates are kept fresh.
+	go func() {
 		log.Infof("Background routine started, ensuring fresh certificates. Interval is %s.", interval.String())
-		go func() {
-			// Routine for keeping public certs synchronized.
-			ticker := time.NewTicker(interval)
-			defer ticker.Stop()
-			for {
-				select {
-				case <-ctx.Done():
-					return
-				case <-ticker.C:
-					buffer = getBuffer()
-					if err := t.readGoogleCerts(ctx, publicGoogleCerts, buffer); err == nil {
-						keySet, err := keyfunc.NewJWKSetJSON(buffer.Bytes())
-						if err == nil {
-							t.publicKeyFunc.Store(keySet)
-						}
+		// Routine for keeping public certs synchronized.
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				buffer = getBuffer()
+				if err := t.readGoogleCerts(ctx, publicGoogleCerts, buffer); err == nil {
+					keySet, err := keyfunc.NewJWKSetJSON(buffer.Bytes())
+					if err == nil {
+						t.publicKeyFunc.Store(keySet)
 					}
-					putBuffer(buffer)
 				}
+				putBuffer(buffer)
 			}
-		}()
-	})
+		}
+	}()
 	return nil
 }
 

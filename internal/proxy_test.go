@@ -3,25 +3,29 @@ package internal_test
 import (
 	"context"
 	"fmt"
-	. "github.com/anderslauri/k8s-gws-authn/internal"
+	. "github.com/anderslauri/open-iap/internal"
 	log "github.com/sirupsen/logrus"
 	"net/http"
 	"os"
 	"testing"
+	"time"
 )
 
 func TestMain(m *testing.M) {
-	lvl, _ := log.ParseLevel("INFO")
+	lvl, _ := log.ParseLevel("DEBUG")
 	log.SetLevel(lvl)
 	os.Exit(m.Run())
 }
 
 // localServiceListener generates a new listener per dynamic port.
 func localServiceListener(ctx context.Context) (Listener, error) {
-	listener, err := NewListener(ctx, "0.0.0.0", "X-Original-URI", 0)
+	defaultInterval := 5 * time.Minute
+	listener, err := NewListener(ctx, "0.0.0.0", "X-Original-URI", 0,
+		defaultInterval, defaultInterval, defaultInterval, defaultInterval)
 	if err != nil {
 		return nil, err
 	}
+	go listener.Open(ctx)
 	return listener, nil
 }
 
@@ -39,7 +43,7 @@ func TestHealthEndpoint(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unexpected error returned, error: %s.", err)
 	}
-	defer listener.Shutdown(ctx)
+	defer listener.Close(ctx)
 
 	req, _ := http.NewRequestWithContext(ctx, "GET", requestUrl(listener.Port(), "healthz"), nil)
 	rsp, err := httpClient.Do(req)
@@ -57,7 +61,7 @@ func TestAuthWithValidIdentityToken(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unexpected error returned, error: %s.", err)
 	}
-	defer listener.Shutdown(ctx)
+	defer listener.Close(ctx)
 
 	idToken, err := requestUserGoogleIdToken(ctx, "https://myurl.com")
 	if err != nil {
@@ -82,7 +86,7 @@ func BenchmarkAuthService(b *testing.B) {
 	if err != nil {
 		b.Fatalf("Unexpected error returned, error: %s.", err)
 	}
-	defer listener.Shutdown(ctx)
+	defer listener.Close(ctx)
 
 	idToken, err := requestUserGoogleIdToken(ctx, "https://myurl.com")
 	if err != nil {

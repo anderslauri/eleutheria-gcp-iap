@@ -1,0 +1,21 @@
+amends "pkl/Application.pkl"
+
+jwkCache {
+  cleaner = 60.min
+}
+
+jwtCache {
+  cleaner = 10.min
+}
+
+headerMapping {
+  url = "X-Original-URI"
+}
+
+publicGoogleCerts {
+  refreshInterval = 10.min
+}
+
+googlePolicyBindings {
+  refreshInterval = 5.min
+}

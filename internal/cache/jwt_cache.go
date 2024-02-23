@@ -18,9 +18,9 @@ type jwtCache struct {
 }
 
 // NewJwtCache creates a cache for JWT entries to be persisted.
-func NewJwtCache(ctx context.Context) *jwtCache {
+func NewJwtCache(ctx context.Context, cleanCacheInterval time.Duration) *jwtCache {
 	cache := &jwtCache{}
-	go cache.cleaner(ctx, 10*time.Minute)
+	go cache.cleaner(ctx, cleanCacheInterval)
 	log.Info("JWT Cache successfully loaded.")
 	return cache
 }

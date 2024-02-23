@@ -1,4 +1,4 @@
-module github.com/anderslauri/k8s-gws-authn
+module github.com/anderslauri/open-iap
 
 go 1.22
 

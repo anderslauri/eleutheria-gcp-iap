@@ -2,12 +2,13 @@ package internal_test
 
 import (
 	"context"
-	"github.com/anderslauri/k8s-gws-authn/internal"
-	"github.com/anderslauri/k8s-gws-authn/internal/cache"
+	"github.com/anderslauri/open-iap/internal"
+	"github.com/anderslauri/open-iap/internal/cache"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/idtoken"
 	"google.golang.org/api/option"
 	"testing"
+	"time"
 )
 
 // requestUserGoogleIdToken calls Google API for user (via ADC) and retrieves an ID-token.
@@ -28,8 +29,9 @@ func requestUserGoogleIdToken(ctx context.Context, aud string) (string, error) {
 }
 
 func newTokenService(ctx context.Context) (*internal.GoogleTokenService, error) {
-	jwkCache := cache.NewJwkCache(ctx)
-	tokenService, err := internal.NewGoogleTokenService(ctx, jwkCache)
+	defaultInterval := 5 * time.Minute
+	jwkCache := cache.NewJwkCache(ctx, 100, defaultInterval)
+	tokenService, err := internal.NewGoogleTokenService(ctx, jwkCache, defaultInterval)
 	if err != nil {
 		return nil, err
 	}

@@ -2,8 +2,9 @@ package internal_test
 
 import (
 	"context"
-	"github.com/anderslauri/k8s-gws-authn/internal"
+	"github.com/anderslauri/open-iap/internal"
 	"testing"
+	"time"
 )
 
 func TestLoadUsersWithRoleForIdentityAwareProxy(t *testing.T) {
@@ -14,7 +15,9 @@ func TestLoadUsersWithRoleForIdentityAwareProxy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Could not load google workspace reader. Error returned: %s", err)
 	}
-	service, _ := internal.NewProjectPolicyReaderService(ctx, gwsReader)
+	defaultInterval := 5 * time.Minute
+
+	service, _ := internal.NewProjectPolicyReaderService(ctx, gwsReader, defaultInterval)
 
 	if err := service.LoadUsersWithRoleForIdentityAwareProxy(ctx); err != nil {
 		t.Fatalf("Expected no error, returned with error %s.", err.Error())

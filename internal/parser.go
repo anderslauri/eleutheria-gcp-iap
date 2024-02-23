@@ -2,7 +2,7 @@ package internal
 
 import (
 	"fmt"
-	"github.com/anderslauri/k8s-gws-authn/internal/cache"
+	"github.com/anderslauri/open-iap/internal/cache"
 	"github.com/google/cel-go/cel"
 )
 

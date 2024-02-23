@@ -12,7 +12,7 @@ func TestJwtCacheWriteAndRead(t *testing.T) {
 		key = "test"
 		val = []byte{'a', 'b', 'c'}
 	)
-	cache := NewJwtCache(context.Background())
+	cache := NewJwtCache(context.Background(), 5*time.Minute)
 	cache.Set(&Params{
 		Key: key,
 		Val: val,
@@ -47,7 +47,7 @@ func TestJwtWriteAndReadFromCache(t *testing.T) {
 		key = "test"
 		val = []byte{'a', 'b', 'c'}
 	)
-	cache := NewJwtCache(context.Background())
+	cache := NewJwtCache(context.Background(), 5*time.Minute)
 	cache.Set(&Params{
 		Key: key,
 		Val: val,

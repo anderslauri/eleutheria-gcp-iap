@@ -13,8 +13,7 @@ type jwkCache struct {
 	cache atomic.Value
 	mutex sync.Mutex
 	// ttl in seconds.
-	ttl    int64
-	minLen int
+	ttl int64
 }
 
 type jwkCacheType map[string]jwkCacheVal
@@ -26,13 +25,10 @@ type jwkCacheVal struct {
 }
 
 // NewJwkCache creates a new cache for JWK. Mostly read, thus we apply copy on write.
-func NewJwkCache(ctx context.Context) *jwkCache {
+func NewJwkCache(ctx context.Context, minEntries uint, cleanCacheInterval time.Duration) *jwkCache {
 	cache := &jwkCache{}
-	cache.ttl = 86400
-	// Attempt only to remove if length is above 500,
-	// even if values are deprecated - let them exist.
-	cache.minLen = 500
-	go cache.cleaner(ctx, 1*time.Hour)
+	// Google service account JWK are valid at least 24h - makes little sense to use smaller cache here.
+	go cache.cleaner(ctx, minEntries, cleanCacheInterval, 86400)
 	log.Info("JWK Cache successfully loaded.")
 	return cache
 }
@@ -59,7 +55,7 @@ func (j *jwkCache) Read(key string, w io.Writer) bool {
 
 // cleaner - removes self-signed JWK after 24h. This is when they expire (or rotate),
 // see: https://cloud.google.com/iam/docs/service-account-creds#google-managed-keys
-func (j *jwkCache) cleaner(ctx context.Context, interval time.Duration) {
+func (j *jwkCache) cleaner(ctx context.Context, minCacheEntries uint, interval time.Duration, ttl int64) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
@@ -70,14 +66,14 @@ func (j *jwkCache) cleaner(ctx context.Context, interval time.Duration) {
 		case <-ticker.C:
 			currentCache, _ := j.cache.Load().(jwkCacheType)
 
-			if len(currentCache) < j.minLen {
+			if len(currentCache) < int(minCacheEntries) {
 				continue
 			}
 			keysToDelete := make(map[string]struct{})
 
 			now := time.Now().Add(interval).Unix()
 			for key, val := range currentCache {
-				if (now - val.wts) >= j.ttl {
+				if (now - val.wts) >= ttl {
 					keysToDelete[key] = struct{}{}
 				}
 			}

@@ -8,8 +8,8 @@ import (
 	"google.golang.org/api/cloudresourcemanager/v1"
 	"google.golang.org/api/option"
 	"strings"
-	"sync"
 	"sync/atomic"
+	"time"
 )
 
 // ProjectPolicyReaderService is a service implementation to retrieve bindings from Google Cloud.
@@ -18,12 +18,12 @@ type ProjectPolicyReaderService struct {
 	pid                string
 	roleCollectionCopy atomic.Value
 	reader             GoogleWorkspaceReader
-	mutex              sync.Mutex
 }
 
 // PolicyBinding is a struct to retain policy information (of what is relevant).
 type PolicyBinding struct {
 	Expression string
+	Title      string
 }
 
 const iapRole = "roles/iap.httpsResourceAccessor"
@@ -37,6 +37,7 @@ type Role string
 // PolicyBindings is a list of bindings attached to a role.
 type PolicyBindings []PolicyBinding
 
+// PolicyBindingCollection is custom map type for Role to policy bindings.
 type PolicyBindingCollection map[Role]PolicyBindings
 
 // UserRoleCollection is a collection of user id to bindings per role.
@@ -65,7 +66,7 @@ func (p *ProjectPolicyReaderService) IdentityAwareProxyPolicyBindingForUser(uid 
 }
 
 // NewProjectPolicyReaderService generates an implementation of PolicyBindingReader.
-func NewProjectPolicyReaderService(ctx context.Context, reader GoogleWorkspaceReader) (*ProjectPolicyReaderService, error) {
+func NewProjectPolicyReaderService(ctx context.Context, reader GoogleWorkspaceReader, refreshInterval time.Duration) (*ProjectPolicyReaderService, error) {
 	credentials, err := google.FindDefaultCredentials(ctx,
 		"https://www.googleapis.com/auth/cloud-platform.read-only")
 	if err != nil {
@@ -83,6 +84,7 @@ func NewProjectPolicyReaderService(ctx context.Context, reader GoogleWorkspaceRe
 	if err = ps.LoadUsersWithRoleForIdentityAwareProxy(ctx); err != nil {
 		return nil, err
 	}
+	go ps.refreshProjectPolicyBindings(ctx, refreshInterval)
 	return ps, nil
 }
 
@@ -92,11 +94,24 @@ func (p *ProjectPolicyReaderService) UserRoleCollection() UserRoleCollection {
 	return val.(UserRoleCollection)
 }
 
+func (p *ProjectPolicyReaderService) refreshProjectPolicyBindings(ctx context.Context, interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if err := p.LoadUsersWithRoleForIdentityAwareProxy(ctx); err != nil {
+				log.WithField("error", err).Error("Could not refresh project policy bindings.")
+			}
+		}
+	}
+}
+
 // LoadUsersWithRoleForIdentityAwareProxy load UserRoleCollection into local memory for usage.
 func (p *ProjectPolicyReaderService) LoadUsersWithRoleForIdentityAwareProxy(ctx context.Context) error {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-
 	policies, err := p.service.Projects.GetIamPolicy(p.pid,
 		&cloudresourcemanager.GetIamPolicyRequest{
 			Options: &cloudresourcemanager.GetPolicyOptions{
@@ -121,6 +136,7 @@ func (p *ProjectPolicyReaderService) LoadUsersWithRoleForIdentityAwareProxy(ctx 
 			}
 			var (
 				expression string
+				title      string
 				// Probably we should revert to first sighting of :
 				uid = UserID(strings.Split(user, ":")[1])
 			)
@@ -138,11 +154,13 @@ func (p *ProjectPolicyReaderService) LoadUsersWithRoleForIdentityAwareProxy(ctx 
 					}
 					if policy.Condition != nil {
 						expression = policy.Condition.Expression
+						title = policy.Condition.Title
 					}
 					userRoleCollection[member][Role(policy.Role)] = append(
 						userRoleCollection[member][Role(policy.Role)],
 						PolicyBinding{
 							Expression: expression,
+							Title:      title,
 						})
 				}
 			}
@@ -152,11 +170,13 @@ func (p *ProjectPolicyReaderService) LoadUsersWithRoleForIdentityAwareProxy(ctx 
 			}
 			if policy.Condition != nil {
 				expression = policy.Condition.Expression
+				title = policy.Condition.Title
 			}
 			userRoleCollection[uid][Role(policy.Role)] = append(
 				userRoleCollection[uid][Role(policy.Role)],
 				PolicyBinding{
 					Expression: expression,
+					Title:      title,
 				})
 		}
 	}

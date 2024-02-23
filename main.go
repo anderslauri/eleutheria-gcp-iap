@@ -2,58 +2,52 @@ package main
 
 import (
 	"context"
-	"github.com/anderslauri/k8s-gws-authn/internal"
-	config "github.com/anderslauri/k8s-gws-authn/pkl/gen"
+	"github.com/anderslauri/open-iap/internal"
+	config "github.com/anderslauri/open-iap/pkl/gen"
 	log "github.com/sirupsen/logrus"
+	"net/http"
 	"os"
-	"time"
-)
-
-const (
-	defaultConfigFile     = "DefaultConfig.pkl"
-	envVariableConfigFile = "APPLICATION_CONFIG_FILE"
+	"os/signal"
 )
 
 func main() {
 	log.SetFormatter(&log.JSONFormatter{})
 	log.SetReportCaller(true)
 
-	configFile := defaultConfigFile
-	if customConfig := os.Getenv(envVariableConfigFile); len(customConfig) > 0 {
-		configFile = os.Getenv(envVariableConfigFile)
+	appConfigFile := "ApplicationDefaultConfig.pkl"
+	if customConfigFile := os.Getenv("APPLICATION_CONFIG_FILE"); len(customConfigFile) > 0 {
+		appConfigFile = os.Getenv("APPLICATION_CONFIG_FILE")
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	defer func() {
-		cancel()
-		// Allow operations to complete.
-		time.Sleep(5 * time.Second)
-		log.Info("Application exiting.")
-	}()
 
-	cfg, err := loadApplicationConfig(ctx, configFile)
+	cfg, err := config.LoadFromPath(ctx, appConfigFile)
 	if err != nil {
-		log.WithField("error", err).Fatalf("Failed to load application configuration.")
-	} else {
-		log.Infof("Configuring new log level to %s.", cfg.LogLevel.String())
-		lvl, _ := log.ParseLevel(cfg.LogLevel.String())
-		log.SetLevel(lvl)
+		log.WithField("error", err).Fatal("Failed to load application configuration.")
 	}
-	log.Info("Application configuration successfully loaded.")
+	lvl, _ := log.ParseLevel(cfg.LogLevel.String())
+	log.SetLevel(lvl)
 
-	listener, err := internal.NewListener(ctx, cfg.Host, cfg.HeaderMapping.Uri, cfg.Port)
+	log.Info("Application configuration successfully loaded. Starting new listener.")
+	// Really need to find a better solution for parameter passing.
+	listener, err := internal.NewListener(ctx, cfg.Host, cfg.HeaderMapping.Url,
+		cfg.Port, cfg.PublicGoogleCerts.RefreshInterval.GoDuration(), cfg.JwkCache.Cleaner.GoDuration(),
+		cfg.JwtCache.Cleaner.GoDuration(), cfg.GooglePolicyBindings.RefreshInterval.GoDuration())
 	if err != nil {
 		log.WithField("error", err).Fatalf("Not possible to start listener.")
 	}
-	defer listener.Shutdown(ctx)
-	// Waiting for signal to halt application.
+	go func() {
+		if err = listener.Open(ctx); err != nil && err != http.ErrServerClosed {
+			log.WithField("error", err).Fatal("Failed to start listener.S")
+		}
+	}()
+	defer func() {
+		log.Info("Exiting application.")
+		_ = listener.Close(ctx)
+		// In memory only, no reason to wait.
+		cancel()
+	}()
+	// Wait for signal.
 	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, os.Interrupt)
 	<-sigs
-}
-
-func loadApplicationConfig(ctx context.Context, filePath string) (*config.ApplicationConfig, error) {
-	c, err := config.LoadFromPath(ctx, filePath)
-	if err != nil {
-		return c, err
-	}
-	return c, err
 }

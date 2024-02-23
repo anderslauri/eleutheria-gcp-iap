@@ -1,30 +1,36 @@
-@go.Package { name = "github.com/anderslauri/k8s-gws-authn/pkl/gen" }
+@go.Package { name = "github.com/anderslauri/open-iap/pkl/gen" }
 module ApplicationConfig
 
 import "package://pkg.pkl-lang.org/pkl-go/pkl.golang@0.5.3#/go.pkl"
 
-// Property type definitions.
-typealias Port     = UInt16(this > 0)
-typealias Host     = String(!isEmpty)
+typealias Port = UInt16(this > 0)
+typealias Host = String(!isEmpty)
 typealias LogLevel = "INFO"|"WARNING"|"DEBUG"|"ERROR"|"TRACE"
-typealias Header   = String(!isEmpty)
-typealias TTL      = Duration(this > 60.s)
+typealias Header = String(!isEmpty)
+typealias Interval = Duration(this > 60.s)
 
-// Default properties.
-host: Host         = "0.0.0.0"
-port: Port         = 8080
-logLevel: LogLevel = "DEBUG"
+host: Host = "0.0.0.0"
+port: Port = 8080
+logLevel: LogLevel = "INFO"
 
-// Application configuration definition.
-cache: Cache
+jwkCache: Cache
+jwtCache: Cache
+publicGoogleCerts: GoogleCerts
 headerMapping: HeaderMapping
+googlePolicyBindings: PolicyBinding
+
+class PolicyBinding {
+  refreshInterval: Interval
+}
+
+class GoogleCerts {
+  refreshInterval: Interval
+}
 
 class Cache {
-  enabled: Boolean
-  ttl: TTL
+  cleaner: Interval
 }
 
 class HeaderMapping {
-  scheme: Header
-  uri: Header
+  url: Header
 }

@@ -14,6 +14,7 @@ func params(requestPath, requestHost string, requestTime time.Time) map[string]a
 }
 
 var defaultLocation, _ = time.LoadLocation("Europe/Berlin")
+
 // https://cloud.google.com/iam/docs/conditions-overview
 func TestExpressionParser(t *testing.T) {
 	var defaultParams = params("/something", "myurl.com", time.Now())
