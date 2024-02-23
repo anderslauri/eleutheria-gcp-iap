@@ -1,4 +1,4 @@
-@go.Package { name = "github.com/anderslauri/open-iap/pkl/gen" }
+@go.Package { name = "github.com/anderslauri/open-iap/gen" }
 module ApplicationConfig
 
 import "package://pkg.pkl-lang.org/pkl-go/pkl.golang@0.5.3#/go.pkl"
@@ -11,13 +11,13 @@ typealias Interval = Duration(this > 60.s)
 
 host: Host = "0.0.0.0"
 port: Port = 8080
-logLevel: LogLevel = "INFO"
 
 jwkCache: Cache
 jwtCache: Cache
 publicGoogleCerts: GoogleCerts
 headerMapping: HeaderMapping
 googlePolicyBindings: PolicyBinding
+logger: Logger
 
 class PolicyBinding {
   refreshInterval: Interval
@@ -33,4 +33,9 @@ class Cache {
 
 class HeaderMapping {
   url: Header
+}
+
+class Logger {
+  logLevel: LogLevel
+  reportCaller: Boolean
 }

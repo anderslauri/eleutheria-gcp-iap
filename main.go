@@ -2,8 +2,8 @@ package main
 
 import (
 	"context"
+	config "github.com/anderslauri/open-iap/gen"
 	"github.com/anderslauri/open-iap/internal"
-	config "github.com/anderslauri/open-iap/pkl/gen"
 	log "github.com/sirupsen/logrus"
 	"net/http"
 	"os"
@@ -12,9 +12,8 @@ import (
 
 func main() {
 	log.SetFormatter(&log.JSONFormatter{})
-	log.SetReportCaller(true)
 
-	appConfigFile := "ApplicationDefaultConfig.pkl"
+	appConfigFile := "app_config.pkl"
 	if customConfigFile := os.Getenv("APPLICATION_CONFIG_FILE"); len(customConfigFile) > 0 {
 		appConfigFile = os.Getenv("APPLICATION_CONFIG_FILE")
 	}
@@ -24,8 +23,9 @@ func main() {
 	if err != nil {
 		log.WithField("error", err).Fatal("Failed to load application configuration.")
 	}
-	lvl, _ := log.ParseLevel(cfg.LogLevel.String())
+	lvl, _ := log.ParseLevel(cfg.Logger.LogLevel.String())
 	log.SetLevel(lvl)
+	log.SetReportCaller(cfg.Logger.ReportCaller)
 
 	log.Info("Application configuration successfully loaded. Starting new listener.")
 	// Really need to find a better solution for parameter passing.

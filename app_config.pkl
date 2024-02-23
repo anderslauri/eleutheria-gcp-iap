@@ -1,4 +1,4 @@
-amends "pkl/Application.pkl"
+amends "default_config.pkl"
 
 jwkCache {
   cleaner = 60.min
@@ -8,6 +8,10 @@ jwtCache {
   cleaner = 10.min
 }
 
+logger {
+  logLevel = "INFO"
+  reportCaller = false
+}
 headerMapping {
   url = "X-Original-URI"
 }

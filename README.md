@@ -27,7 +27,7 @@ principles of `Identity Aware Proxy`. Principles, as we don't support `client_id
 ## Role bindings
 :warning:
 
-Please note. Role bindings are consumed asynchronously given a defined time interval (see configuration). This may or
+Role bindings are consumed asynchronously given a defined time interval (see configuration). This may or
 may not be acceptable - depends on your choice. Default interval is `5min`. For the future, consuming `audit iam events`
 should be implemented to ensure a close to real time change of bindings.
 
@@ -36,10 +36,14 @@ should be implemented to ensure a close to real time change of bindings.
 in memory and evaluated given request parameters. `request.time` is provided given `time.Now()`.
 
 ## How to run
-Normal Go application. Configuration is based [pkl-lang][pkl-lang]. Follow required steps to use `pkl`, use `WSL` for Windows as `pkl` is not natively supported.
 
-1. Compile configuration using `pkl-gen-go pkl/Application.pkl` in root directory of project.
-2. Run `go build` to build image. Ensure `pkl` is available in `$PATH` before executing application.
+:exclamation: Use `Dockerfile` as example.
+
+Configuration is based [pkl-lang][pkl-lang]. Use `pkl` through `wsl` for Windows.
+
+1. Compile configuration using `pkl-gen-go default_config.pkl`.
+2. Build application.
+3. Ensure `pkl` is available in `$PATH`. Both `default_config.pkl` and `app_config.pkl` must be present in same directory.
 
 ### Google Service Account
 When running on `GKE` - use `Workload Identity`. Normal `ADC` behavior is used from Google libraries. Ensure GSA have

@@ -33,22 +33,11 @@ type Listener interface {
 	Open(ctx context.Context) error
 }
 
-const (
-	proxyAuthorizationHeader = "X-Forwarded-Proxy-Authorization"
-	authorizationHeader      = "X-Forwarded-Authorization"
-)
-
 // NewListener creates a new HTTP-server. Listen(ctx...) must be invoked from calling routine to start listening.
 func NewListener(ctx context.Context, host, xHeaderUri string, port uint16,
 	refreshPublicCertsInterval, jwkCacheCleanInterval, jwtCacheCleanInterval,
 	policyBindingRefreshInterval time.Duration) (Listener, error) {
 
-	log.Info("Starting client for Google Tokens.")
-	googleTokenService, err := NewGoogleTokenService(ctx,
-		cache.NewJwkCache(ctx, 100, jwkCacheCleanInterval), refreshPublicCertsInterval)
-	if err != nil {
-		return nil, err
-	}
 	log.Info("Starting client for Google Workspace.")
 	googleWorkspaceReaderClient, err := NewGoogleWorkspaceReader(ctx)
 	if err != nil {
@@ -57,6 +46,12 @@ func NewListener(ctx context.Context, host, xHeaderUri string, port uint16,
 	log.Info("Starting client for Project policy bindings and conditional expressions.")
 	policyReaderService, err := NewProjectPolicyReaderService(ctx,
 		googleWorkspaceReaderClient, policyBindingRefreshInterval)
+	if err != nil {
+		return nil, err
+	}
+	log.Info("Starting client for Google Tokens.")
+	googleTokenService, err := NewGoogleTokenService(ctx,
+		cache.NewJwkCache(ctx, 100, jwkCacheCleanInterval), refreshPublicCertsInterval)
 	if err != nil {
 		return nil, err
 	}
@@ -112,7 +107,7 @@ func (l *listener) auth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Extract bearer token.
-	tokenString, _ := request.HeaderExtractor{proxyAuthorizationHeader, authorizationHeader}.ExtractToken(r)
+	tokenString, _ := request.HeaderExtractor{"X-Forwarded-Proxy-Authorization", "X-Forwarded-Authorization"}.ExtractToken(r)
 	// Extract request url.
 	requestURL, err := url.Parse(r.Header.Get(l.xHeaderURI))
 	if err != nil || (len(tokenString) < 7 || !strings.EqualFold(tokenString[:7], "bearer:")) {
