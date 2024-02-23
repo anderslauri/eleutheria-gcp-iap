@@ -2,7 +2,7 @@
 Open implementation of Programmatic Identity Aware Proxy for Google Cloud workload to workload authentication using Google Service Account.
 Performs validity and signature verification of Google Service Account JWT - while also verifying subject of claim `email` has role bidning
 `roles/iap.httpsResourceAccess` inside project. Role `roles/iap.httpsResourceAccess` (as with Identity Aware Proxy) is required for authentication.
-Conditional expressions are supported. A role binding can restricted to only allow communication to a single specific `host` or `path`.
+Conditional expressions are supported. A role binding can be restricted to only allow communication to a single specific `host` and `path`.
 
 The following token types are supported for Google Service Account:
 
