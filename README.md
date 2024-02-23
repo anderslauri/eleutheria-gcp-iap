@@ -40,8 +40,8 @@ For the future, consuming `audit iam events` should be implemented to ensure a c
 All conditional bindings in Google Cloud are persisted and compiled in memory. If a role has a conditional binding, this binding is 
 compiled and evaluated in memory using `cel-go`. All parameters are available per request.
 
-:exclamation: Conditional bindings compiles into a program which is evaluated based on request parameters. Each program is cached and
-re-used for performance reasons. Cache key is the expression itself. This is done for performance reasons.
+:exclamation: Conditional bindings compiles into a program which is evaluated based on request parameters. Each compiled program is cached and
+re-used for performance reasons. Cache key is conditional expression.
 
 ## How to run
 :exclamation: Use `Dockerfile` as example.
