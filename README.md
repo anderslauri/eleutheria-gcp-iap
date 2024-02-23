@@ -1,42 +1,39 @@
 # Open Programmatic Identity Aware Proxy for Google Cloud
-Open implementation of Programmatic Identity Aware Proxy for Google Cloud. Used, in example, by `nginx` or `traefik` for authentication. 
-Verifies JWT issued by Google Cloud Service Account. Ensuring validity and signature verification, as well as, ensurning subject 
-of claim `email` have role binding `roles/iap.httpsResourceAccess` inside project. Conditional expressions are supported, i.e one can
-configure a role binding to be restricted only to a specific `host` or `path` - this will be recognized and evaluated in request.
+Open implementation of Programmatic Identity Aware Proxy for Google Cloud workload to workload authentication using Google Service Account.
+Performs validity and signature verification of Google Service Account JWT - while also verifying subject of claim `email` has role bidning
+`roles/iap.httpsResourceAccess` inside project. Role `roles/iap.httpsResourceAccess` (as with Identity Aware Proxy) is required for authentication.
+Conditional expressions are supported. A role binding can restricted to only allow communication to a single specific `host` or `path`.
 
 The following token types are supported for Google Service Account:
 
-- `ID-Token`
-- `Self Signed JWT`
+- **ID-Token**
+- **Self-Signed JWTs**
 
 Please reference [Google Cloud Token Types][Google Cloud Token Types] for more information.
 
 ## Why?
-`Identity Aware Proxy` for Google Cloud is only available in `BeyondCorp Enterprise`. There is other solutions available on GitHub,
-however, none of these don't really fit the frame that I would like have for workload to workload authentication. So here we are.
-
-:exclamation: The code strives to retain a performance aware profile. Caching is used aggressivly on multiple layers to ensure an overall
-low latency 90th percentile response time. To benefit from caching, one should use a ring hash routing on JWT. This will ensure cache locality.
+- Identity Aware Proxy for Google Cloud is only available in BeyondCorp Enterprise.
+- There is other solutions available on GitHub, however, none of are really suitable and made compatible with existing IAM on Google Cloud.
 
 ## Authentication of Google Cloud Service Account
+1. Signature verification using `JWK`. Source of `JWK` is determined given type of JWT.
+2. `iat` and `exp` claim verification. Clock skew is 30 seconds, meaning, `iat - <30 seconds>` and `exp + <30 seconds>`.
+3. `aud` claim must be equal to request url.
+4. Role `roles/iap.httpsResourceAccessor` is verified given subject of claim email. Role binding can be granted directly on project,
+   or indirectly, via membership in Google Workspace group.
 
-1. Signature verification using `JWK`. `JWK` is identified automatically given type of JWT.
-2. `iat` and `exp` claim verification. Default clock skew is 30 seconds, meaning, `iat - <30 seconds>` and `exp + <30 seconds>`.
-3. `aud` claim to equal request url.
-4. Role `roles/iap.httpsResourceAccessor` is verified given email claim. Role binding can be given directly on project
-   or via membership in group in Google Workspace. If conditional binding is present - this binding is evaluated.
+:exclamation: Steps `{1..3}` follow [JWT-verification as described by Google Cloud][JWT-Verification]. Step `4` is custom step following
+the ideas of `Identity Aware Proxy`.
 
-:exclamation: `{1..3}` follow [JWT-verification as described by Google Cloud][JWT-Verification]. Step `4` is custom step following
-principles of `Identity Aware Proxy`. Principles, as we don't support `client_id` as part of claim `aud` - only url.
+:exclamation: After successful `{1..4}`. Value of claim `email` is cached. Key is hash, in `SHA256`, of `{JWT || Request URL}`. 
+`ttl` for cache value is `exp - <interval of cleaning routine>`. Once token is found in cache - only step `4` is performed per each request.
 
-:exclamation: Given successful validity and signature verification of JWT. Value of claim `email` is cached. 
-Cache key is hash, in `SHA256`, of `{JWT || Request URL}`. `ttl` for cache entry is `exp - <interval of cleaning routine>`. Once 
-token is found in cache - only step `4` is performed per each request. This is done for performance reasons.
+:exclamation: The code strives to retain a performance aware profile. Caching is used aggressivly on multiple layers to ensure an overall
+low 90th percentile response time. To benefit from cache locality, use a ring hash for routing.
 
 ## Role bindings
 :warning: All role bindings are consumed asynchronously given a defined time interval (see configuration). This may or
-may not be acceptable - depends on your choice. Bindings are kept in memory for performance reasons. Default interval is `5min`. 
-For the future. Consuming `audit iam events` should be implemented to ensure close to real time change of bindings in memory.
+may not be acceptable - depends on your choice. Bindings are kept in memory for performance reasons. Default interval is `5min`.
 
 ### Conditional expressions
 `request.path`, `request.host` and `request.time` are supported with conditional expressions with role `roles/iap.httpsResourceAccessor`. 
@@ -46,26 +43,20 @@ expressions are only compiled once - after first compilation - the program (repr
 ## How to run
 :exclamation: Use `Dockerfile` as example.
 
-Configuration is based [pkl-lang][pkl-lang]. Use `pkl` through `wsl` for Windows.
-
-1. Compile configuration using `pkl-gen-go default_config.pkl`.
-2. Compile application.
-3. `pkl` must be available in `$PATH`. As well, `default_config.pkl` and `app_config.pkl` must be present in same directory as application executable.
+Configuration is based [pkl-lang][pkl-lang]. Use `pkl` through `wsl` for Windows. `pkl` must be available in `$PATH`. As well, `default_config.pkl` 
+and `app_config.pkl` must be present in same directory as application executable.
 
 ### Google Service Account Permissions
-:exclamation: `Groups Reader` is required on Google Workspace. Reference [Google Workspace Administrator Roles][Google Workspace Administrator Roles].
+* **Groups Reader** is required on Google Workspace. Reference [Google Workspace Administrator Roles][Google Workspace Administrator Roles].
+* **get-iam-policy** is required to list all bindings for role `roles/iap.httpsResourceAccess`. Custom role is recommended.
+* **Admin API** is required on project to enable access to `Directory API`.
 
-:exclamation: `get-iam-policy` is required to list all bindings for role `roles/iap.httpsResourceAccess`. Custom role is recommended.
-
-:exclamation: `Admin API` is required on project to enable access to `Directory API`.
-
-## Endpoints 
+## API 
 
 ### /auth (GET)
-Authentication endpoint. Return code `200 OK` given successful authentication. `407 Proxy Authentication Required`
-is given in case of unsuccessful authentication.
+Authentication endpoint. Return code `200 OK` given successful authentication, else `407 Proxy Authentication Required`.
 
-#### Headers
+#### Required headers
 :warning: `X-Original-URI`, i.e. from `nginx` has assumed trust.
 
 1. `X-Forwarded-Authorization` or `X-Forwarded-Proxy-Authorization`.
@@ -75,10 +66,10 @@ is given in case of unsuccessful authentication.
 Kubernetes health endpoint for liveness and readiness. Return code `200 OK`.
 
 ## Technical Debt
-1. Only role bindings on a project level is taken into consideration. Folders and organization not implemented.
-2. Cache behavior to be cleaned up. Implement support for `MemoryStore`.
-3. Consume `IAM Audit Events` to ensure close to real time changes to policy bindings for user.
-4. Implement proxy feature.
+* Role bindings on project level are only used. Folders and organization not implemented.
+* Implement support for `MemoryStore`.
+* Consume `IAM Audit Events`, ensuring close to real time changes to policy bindings for user.
+* Implement proxy feature.
 
 [Google Workspace Groups API]: <https://developers.google.com/admin-sdk/directory/reference/rest/v1/groups> "Google Workspace Groups API"
 [Google Workspace Administrator Roles]: <https://support.google.com/a/answer/2405986> "Google Workspace Administrator Roles"
