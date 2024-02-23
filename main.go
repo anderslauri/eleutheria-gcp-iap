@@ -37,7 +37,7 @@ func main() {
 	}
 	go func() {
 		if err = listener.Open(ctx); err != nil && err != http.ErrServerClosed {
-			log.WithField("error", err).Fatal("Failed to start listener.S")
+			log.WithField("error", err).Fatal("Failed to start listener.")
 		}
 	}()
 	defer func() {
