@@ -10,7 +10,7 @@
 
 .idea
 
-pkl/gen/*.go
+pkl/gen/*
 
 # Test binary, built with `go test -c`
 *.test
