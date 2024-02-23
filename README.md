@@ -49,8 +49,8 @@ expressions are only compiled once - after first compilation - the program (repr
 Configuration is based [pkl-lang][pkl-lang]. Use `pkl` through `wsl` for Windows.
 
 1. Compile configuration using `pkl-gen-go default_config.pkl`.
-2. Build application.
-3. Ensure `pkl` is available in `$PATH`. Both `default_config.pkl` and `app_config.pkl` must be present in same directory as binary.
+2. Compile application.
+3. `pkl` must be available in `$PATH`. As well, `default_config.pkl` and `app_config.pkl` must be present in same directory as application executable.
 
 ### Google Service Account Permissions
 :exclamation: `Groups Reader` is required on Google Workspace. Reference [Google Workspace Administrator Roles][Google Workspace Administrator Roles].
