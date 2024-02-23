@@ -48,14 +48,15 @@ project have `Admin SDK` enabled as API.
 ## Endpoints 
 
 ### /auth (GET)
-Authentication endpoint. Return code `200 OK` given successful authentication.
+Authentication endpoint. Return code `200 OK` given successful authentication. `407 Proxy Authentication Required`
+is given in case unsuccessful authentication.
 
 #### Headers
 1. `X-Forwarded-Authorization` or `X-Forwarded-Proxy-Authorization`.
 2. `X-Original-URI` must be present.
 
 ### /healthz (GET)
-Kubernetes health endpoint for liveness and readiness. Return code `200 OK` with no body.
+Kubernetes health endpoint for liveness and readiness. Return code `200 OK` with no body. 
 
 ## Technical Debt
 1. Only role bindings on a project level is taken into consideration. Folders and organization not implemented.
