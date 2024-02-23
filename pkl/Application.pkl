@@ -1,0 +1,36 @@
+@go.Package { name = "github.com/anderslauri/open-iap/pkl/gen" }
+module ApplicationConfig
+
+import "package://pkg.pkl-lang.org/pkl-go/pkl.golang@0.5.3#/go.pkl"
+
+typealias Port = UInt16(this > 0)
+typealias Host = String(!isEmpty)
+typealias LogLevel = "INFO"|"WARNING"|"DEBUG"|"ERROR"|"TRACE"
+typealias Header = String(!isEmpty)
+typealias Interval = Duration(this > 60.s)
+
+host: Host = "0.0.0.0"
+port: Port = 8080
+logLevel: LogLevel = "INFO"
+
+jwkCache: Cache
+jwtCache: Cache
+publicGoogleCerts: GoogleCerts
+headerMapping: HeaderMapping
+googlePolicyBindings: PolicyBinding
+
+class PolicyBinding {
+  refreshInterval: Interval
+}
+
+class GoogleCerts {
+  refreshInterval: Interval
+}
+
+class Cache {
+  cleaner: Interval
+}
+
+class HeaderMapping {
+  url: Header
+}

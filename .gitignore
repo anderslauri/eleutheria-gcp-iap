@@ -8,6 +8,10 @@
 *.so
 *.dylib
 
+.idea
+
+pkl/gen
+
 # Test binary, built with `go test -c`
 *.test
 
@@ -19,3 +23,4 @@
 
 # Go workspace file
 go.work
+go.sum
