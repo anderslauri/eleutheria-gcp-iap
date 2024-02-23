@@ -25,9 +25,7 @@ Please reference [Google Cloud Token Types][Google Cloud Token Types] for more i
 principles of `Identity Aware Proxy`. Principles, as we don't support `client_id` as part of claim `aud` - only url.
 
 ## Role bindings
-:warning:
-
-Role bindings are consumed asynchronously given a defined time interval (see configuration). This may or
+:warning: Role bindings are consumed asynchronously given a defined time interval (see configuration). This may or
 may not be acceptable - depends on your choice. Default interval is `5min`. For the future, consuming `audit iam events`
 should be implemented to ensure a close to real time change of bindings.
 
@@ -36,7 +34,6 @@ should be implemented to ensure a close to real time change of bindings.
 in memory and evaluated given request parameters. `request.time` is provided given `time.Now()`.
 
 ## How to run
-
 :exclamation: Use `Dockerfile` as example.
 
 Configuration is based [pkl-lang][pkl-lang]. Use `pkl` through `wsl` for Windows.
