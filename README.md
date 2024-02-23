@@ -43,8 +43,8 @@ expressions are only compiled once - after first compilation - the program (repr
 ## How to run
 :exclamation: Use `Dockerfile` as example.
 
-Configuration is based [pkl-lang][pkl-lang]. Use `pkl` through `wsl` for Windows. `pkl` must be available in `$PATH`. As well, `default_config.pkl` 
-and `app_config.pkl` must be present in same directory as application executable.
+Configuration uses [pkl-lang][pkl-lang]. `pkl` must be available in `$PATH`. As well, `default_config.pkl` 
+and `app_config.pkl` must be present in same directory as application executable when starting application.
 
 ### Google Service Account Permissions
 * **Groups Reader** is required on Google Workspace. Reference [Google Workspace Administrator Roles][Google Workspace Administrator Roles].
