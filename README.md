@@ -30,8 +30,8 @@ may not be acceptable - depends on your choice. Default interval is `5min`. For 
 should be implemented to ensure a close to real time change of bindings.
 
 ### Conditional bindings
-`request.path`, `request.host` and `request.time` are in conditional bindings. These conditions are compiled in memory
-and evaluated given request parameters. `request.time` is provided given `time.Now()`.
+`request.path`, `request.host` and `request.time` are supported with conditional bindings. These conditions are compiled
+in memory and evaluated given request parameters. `request.time` is provided given `time.Now()`.
 
 ## How to run
 Normal Go application. Configuration is based [pkl-lang][pkl-lang]. Follow required steps to use `pkl`, use `WSL` for Windows.
