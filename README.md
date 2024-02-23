@@ -52,11 +52,15 @@ Authentication endpoint. Return code `200 OK` given successful authentication. `
 is given in case unsuccessful authentication.
 
 #### Headers
+:warning:
+
+`X-Original-URI`, i.e. from `nginx` has an assumed trust!
+
 1. `X-Forwarded-Authorization` or `X-Forwarded-Proxy-Authorization`.
-2. `X-Original-URI` must be present.
+2. `X-Original-URI` is configured to be present. This can be changed using `HeaderMapping` in configuration.
 
 ### /healthz (GET)
-Kubernetes health endpoint for liveness and readiness. Return code `200 OK` with no body. 
+Kubernetes health endpoint for liveness and readiness. Return code `200 OK`.
 
 ## Technical Debt
 1. Only role bindings on a project level is taken into consideration. Folders and organization not implemented.
