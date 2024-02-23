@@ -1,8 +1,8 @@
 # Open Programmatic Identity Aware Proxy for Google Cloud
 Open implementation of Programmatic Identity Aware Proxy for Google Cloud. Used, in example, by `nginx` or `traefik` for authentication. 
 Verifies JWT issued by Google Cloud Service Account. Ensuring validity and signature verification, as well as, ensurning subject 
-of claim `email` have role binding `roles/iap.httpsResourceAccess` inside project. Conditional bindings are supported, i.e one can
-configure a role binding to be restricted only to a specific `host` or `path` - and this will be recognized and evaluated in request.
+of claim `email` have role binding `roles/iap.httpsResourceAccess` inside project. Conditional expressions are supported, i.e one can
+configure a role binding to be restricted only to a specific `host` or `path` - this will be recognized and evaluated in request.
 
 The following token types are supported for Google Service Account:
 
@@ -14,6 +14,9 @@ Please reference [Google Cloud Token Types][Google Cloud Token Types] for more i
 ## Why?
 `Identity Aware Proxy` for Google Cloud is only available in `BeyondCorp Enterprise`. There is other solutions available on GitHub,
 however, none of these don't really fit the frame that I would like have for workload to workload authentication. So here we are.
+
+:exclamation: The code strives to retain a performance aware profile. Caching is used aggressivly on multiple layers to ensure an overall
+low latency 90th percentile response time. To benefit from caching, one should use a ring hash routing on JWT. This will ensure cache locality.
 
 ## Authentication of Google Cloud Service Account
 
@@ -27,21 +30,18 @@ however, none of these don't really fit the frame that I would like have for wor
 principles of `Identity Aware Proxy`. Principles, as we don't support `client_id` as part of claim `aud` - only url.
 
 :exclamation: Given successful validity and signature verification of JWT. Value of claim `email` is cached. 
-Cache key is hash, in `SHA256`, of `(JWT || request url)`. `ttl` for cache is `exp - <interval of cleaning routine>`. Once 
+Cache key is hash, in `SHA256`, of `{JWT || Request URL}`. `ttl` for cache entry is `exp - <interval of cleaning routine>`. Once 
 token is found in cache - only step `4` is performed per each request. This is done for performance reasons.
 
 ## Role bindings
 :warning: All role bindings are consumed asynchronously given a defined time interval (see configuration). This may or
-may not be acceptable - depends on your choice. Bindings are kept in memory for performance. Default interval is `5min`. 
-For the future, consuming `audit iam events` should be implemented to ensure a close to real time change of bindings.
+may not be acceptable - depends on your choice. Bindings are kept in memory for performance reasons. Default interval is `5min`. 
+For the future. Consuming `audit iam events` should be implemented to ensure close to real time change of bindings in memory.
 
-### Conditional bindings
-`request.path`, `request.host` and `request.time` are supported with conditional bindings with role `roles/iap.httpsResourceAccessor`.
-All conditional bindings in Google Cloud are persisted and compiled in memory. If a role has a conditional binding, this binding is 
-compiled and evaluated in memory using `cel-go`. All parameters are available per request.
-
-:exclamation: Conditional bindings compiles into a program which is evaluated based on request parameters. Each compiled program is cached and
-re-used for performance reasons. Cache key is conditional expression.
+### Conditional expressions
+`request.path`, `request.host` and `request.time` are supported with conditional expressions with role `roles/iap.httpsResourceAccessor`. 
+If role binding has conditional expression, this conditional expression is compiled and evaluated in memory using `cel-go`. All conditional
+expressions are only compiled once - after first compilation - the program (representing conditional expression) is cached for performance reasons.
 
 ## How to run
 :exclamation: Use `Dockerfile` as example.
