@@ -36,9 +36,10 @@ should be implemented to ensure a close to real time change of bindings.
 in memory and evaluated given request parameters. `request.time` is provided given `time.Now()`.
 
 ## How to run
-Normal Go application. Configuration is based [pkl-lang][pkl-lang]. 
+Normal Go application. Configuration is based [pkl-lang][pkl-lang]. Follow required steps to use `pkl`, use `WSL` for Windows as `pkl` is not natively supported.
 
-Follow required steps to use `pkl`, use `WSL` for Windows. Compile pkl using `pkl-gen-go pkl/Application.pkl`.
+1. Compile configuration using `pkl-gen-go pkl/Application.pkl` in root directory of project.
+2. Run `go build` to build image. Ensure `pkl` is available in `$PATH` before executing application.
 
 ### Google Service Account
 When running on `GKE` - use `Workload Identity`. Normal `ADC` behavior is used from Google libraries. Ensure GSA have
