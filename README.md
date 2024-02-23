@@ -1,4 +1,6 @@
 # Open Programmatic Identity Aware Proxy for Google Cloud
+:warning: Program testing can be used to show the presence of bugs, but never to show their absence!
+
 Open implementation of Programmatic Identity Aware Proxy for Google Cloud. Can be used by, i.e. `nginx` or `traefik`. 
 Verifies JWT issued by Google Cloud, ensuring validity and signature verification. Ensure subject of claim `email` have
 role binding `roles/iap.httpsResourceAccess` inside relevant project. Conditional bindings are also supported given
