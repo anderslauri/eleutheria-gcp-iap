@@ -179,14 +179,15 @@ func (t *GoogleTokenService) NewGoogleToken(ctx context.Context, tokenString str
 	}
 	issuer, _ = token.Claims.GetIssuer()
 
-	tokenClaims := &GoogleTokenClaims{}
+	tokenClaims := getGoogleTokenClaims()
 	defer putGoogleTokenClaims(tokenClaims)
 
 	keySet, err := t.keyFunc(ctx, issuer)
 	if err != nil {
 		return err
 	}
-	if token, err := jwt.ParseWithClaims(tokenString, tokenClaims, keySet.Keyfunc,
+
+	if token, err = jwt.ParseWithClaims(tokenString, tokenClaims, keySet.Keyfunc,
 		jwt.WithLeeway(defaultLeeway)); err != nil {
 		return err
 	} else if claims, ok := token.Claims.(*GoogleTokenClaims); ok && token.Valid {

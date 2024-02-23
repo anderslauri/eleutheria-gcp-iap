@@ -165,7 +165,7 @@ func (l *listener) auth(w http.ResponseWriter, r *http.Request) {
 verifyGoogleCloudPolicyBindings:
 	bindings, err := l.policyReader.IdentityAwareProxyPolicyBindingForUser(email)
 	if err != nil {
-		log.WithField("error", err).Errorf("No policy role binding found for user %s.", email)
+		log.WithField("error", err).Warningf("No policy role binding found for user %s.", email)
 		w.WriteHeader(http.StatusProxyAuthRequired)
 		return
 	} else if len(bindings) == 1 && len(bindings[0].Expression) == 0 {
