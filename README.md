@@ -40,7 +40,8 @@ Normal Go application. Configuration is based [pkl-lang][pkl-lang]. Follow requi
 When running on `GKE` - use `Workload Identity`. Normal `ADC` behavior is used from Google libraries. Ensure GSA have
 `Groups Reader` on Google Workspace. Reference [Google Workspace Administrator Roles][Google Workspace Administrator Roles].
 
-Define a custom role. `get-iam-policy` is used to retrieve all bindings for role `roles/iap.httpsResourceAccess`.
+Define a custom role. `get-iam-policy` is used to retrieve all bindings for role `roles/iap.httpsResourceAccess`. Ensure
+project have `Admin SDK` enabled as API.
 
 ## Endpoints 
 
