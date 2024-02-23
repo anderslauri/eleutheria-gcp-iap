@@ -49,7 +49,7 @@ project have `Admin SDK` enabled as API.
 
 ### /auth (GET)
 Authentication endpoint. Return code `200 OK` given successful authentication. `407 Proxy Authentication Required`
-is given in case unsuccessful authentication.
+is given in case of unsuccessful authentication.
 
 #### Headers
 :warning:
