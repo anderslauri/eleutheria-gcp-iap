@@ -1,6 +1,4 @@
 # Open Programmatic Identity Aware Proxy for Google Cloud
-:warning: Program testing can be used to show the presence of bugs, but never to show their absence!
-
 Open implementation of Programmatic Identity Aware Proxy for Google Cloud. Can be used by, i.e. `nginx` or `traefik`. 
 Verifies JWT issued by Google Cloud, ensuring validity and signature verification. Ensure subject of claim `email` have
 role binding `roles/iap.httpsResourceAccess` inside relevant project. Conditional bindings are also supported given
@@ -19,19 +17,20 @@ Please reference [Google Cloud Token Types][Google Cloud Token Types] for more i
 2. `iat` and `exp` claim verification. Default clock skew is 30 seconds, meaning, `iat - <30 seconds>` and `exp + <30 seconds>`.
 3. `aud` claim verification is done based on request url.
 4. Role `roles/iap.httpsResourceAccessor` is verified given email claim. Role binding can be given directly on project
-   or via membership in group in Google Workspace. If conditional binding is present - this binding is evaluated also.
+   or via membership in group in Google Workspace. If conditional binding is present - this binding is evaluated.
 
 `{1..3}` follow [JWT-verification as described by Google Cloud][JWT-Verification]. Step `4` is custom step following
 principles of `Identity Aware Proxy`. Principles, as we don't support `client_id` as part of claim `aud` - only url.
 
 ## Role bindings
-:warning: Role bindings are consumed asynchronously given a defined time interval (see configuration). This may or
-may not be acceptable - depends on your choice. Default interval is `5min`. For the future, consuming `audit iam events`
-should be implemented to ensure a close to real time change of bindings.
+:warning: All role bindings are consumed asynchronously given a defined time interval (see configuration). This may or
+may not be acceptable - depends on your choice. Bindings are kept in memory for performance. Default interval is `5min`. 
+For the future, consuming `audit iam events` should be implemented to ensure a close to real time change of bindings.
 
 ### Conditional bindings
-`request.path`, `request.host` and `request.time` are supported with conditional bindings. These conditions are compiled
-in memory and evaluated given request parameters. `request.time` is provided given `time.Now()`.
+`request.path`, `request.host` and `request.time` are supported with conditional bindings with role `roles/iap.httpsResourceAccessor`.
+All conditional bindings in Google Cloud are persisted and compiled in memory. If a role has a conditional binding, this binding is 
+compiled and evaluated in memory using `cel-go`. All parameters are available per request.
 
 ## How to run
 :exclamation: Use `Dockerfile` as example.
