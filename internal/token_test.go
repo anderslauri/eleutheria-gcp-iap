@@ -30,7 +30,7 @@ func requestUserGoogleIdToken(ctx context.Context, aud string) (string, error) {
 
 func newTokenService(ctx context.Context) (*internal.GoogleTokenService, error) {
 	defaultInterval := 5 * time.Minute
-	jwkCache := cache.NewJwkCache(ctx, 100, defaultInterval)
+	jwkCache := cache.NewExpiryCache(ctx, defaultInterval)
 	tokenService, err := internal.NewGoogleTokenService(ctx, jwkCache, defaultInterval)
 	if err != nil {
 		return nil, err
@@ -42,11 +42,12 @@ func TestNewGoogleTokenGeneration(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	aud := "https://myurl.com"
 	tokenService, _ := newTokenService(ctx)
-	idToken, _ := requestUserGoogleIdToken(ctx, "https://myurl.com")
+	idToken, _ := requestUserGoogleIdToken(ctx, aud)
 	token := &internal.GoogleToken{}
 
-	if err := tokenService.NewGoogleToken(ctx, idToken, token); err != nil {
+	if err := tokenService.NewGoogleToken(ctx, idToken, aud, token); err != nil {
 		t.Fatalf("Expected no error from token, error returned: %s", err)
 	}
 }
@@ -55,12 +56,13 @@ func BenchmarkNewGoogleTokenService(b *testing.B) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	aud := "https://myurl.com"
 	token := &internal.GoogleToken{}
 	tokenService, _ := newTokenService(ctx)
-	idToken, _ := requestUserGoogleIdToken(ctx, "https://myurl.com")
+	idToken, _ := requestUserGoogleIdToken(ctx, aud)
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		_ = tokenService.NewGoogleToken(ctx, idToken, token)
+		_ = tokenService.NewGoogleToken(ctx, idToken, aud, token)
 	}
 }

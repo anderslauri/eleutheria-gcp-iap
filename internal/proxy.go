@@ -23,7 +23,7 @@ type listener struct {
 	tokenService          *GoogleTokenService
 	policyReader          PolicyReader
 	googleWorkspaceClient GoogleWorkspaceReader
-	jwtCache              cache.Cache
+	jwtCache              *cache.ExpiryCache
 }
 
 // Listener is an interface for a listener implementation.
@@ -51,7 +51,7 @@ func NewListener(ctx context.Context, host, xHeaderUri string, port uint16,
 	}
 	log.Info("Starting client for Google Tokens.")
 	googleTokenService, err := NewGoogleTokenService(ctx,
-		cache.NewJwkCache(ctx, 100, jwkCacheCleanInterval), refreshPublicCertsInterval)
+		cache.NewExpiryCache(ctx, jwkCacheCleanInterval), refreshPublicCertsInterval)
 	if err != nil {
 		return nil, err
 	}
@@ -68,7 +68,7 @@ func NewListener(ctx context.Context, host, xHeaderUri string, port uint16,
 		port:                  tcpListener.Addr().(*net.TCPAddr).Port,
 		policyReader:          policyReaderService,
 		googleWorkspaceClient: googleWorkspaceReaderClient,
-		jwtCache:              cache.NewJwtCache(ctx, jwtCacheCleanInterval),
+		jwtCache:              cache.NewExpiryCache(ctx, jwtCacheCleanInterval),
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", l.healthz)
@@ -94,20 +94,14 @@ func (l *listener) Close(ctx context.Context) error {
 }
 
 func (l *listener) healthz(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "GET" {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
 	w.WriteHeader(http.StatusOK)
 }
 
 func (l *listener) auth(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "GET" {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
 	// Extract bearer token.
-	tokenString, _ := request.HeaderExtractor{"X-Forwarded-Proxy-Authorization", "X-Forwarded-Authorization"}.ExtractToken(r)
+	tokenString, _ := request.HeaderExtractor{
+		"X-Forwarded-Proxy-Authorization",
+		"X-Forwarded-Authorization"}.ExtractToken(r)
 	// Extract request url.
 	requestURL, err := url.Parse(r.Header.Get(l.xHeaderURI))
 	if err != nil || (len(tokenString) < 7 || !strings.EqualFold(tokenString[:7], "bearer:")) {
@@ -122,40 +116,38 @@ func (l *listener) auth(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	var (
-		audience  = fmt.Sprintf("%s://%s", requestURL.Scheme, requestURL.Host)
-		hasher    = sha256.New()
-		tokenHash string
+		aud       = fmt.Sprintf("%s://%s", requestURL.Scheme, requestURL.Host)
+		now       = time.Now().Unix()
+		tokenHash = fmt.Sprintf("%s:%s", tokenString, aud)
 		email     UserID
 		token     *GoogleToken
 	)
-	if _, err = hasher.Write([]byte(fmt.Sprintf("%s:%s", tokenString, audience))); err != nil {
+
+	hasher := sha256.New()
+	// Verify is Google Service Account JWT is present within our local cache, if found and exp is good,
+	// go directly to role binding processing as token requires no re-processing given its valid status.
+	if _, err = hasher.Write([]byte(tokenHash)); err != nil {
 		log.WithField("error", err).Warning("hasher.Write: returned error. Unexpected.")
-	} else {
-		// Load token from cache.
-		if val, ok := l.jwtCache.Get(hex.EncodeToString(hasher.Sum(nil))); ok {
-			email = val.(UserID)
-			goto verifyGoogleCloudPolicyBindings
-		}
+	} else if entry, ok := l.jwtCache.Get(hex.EncodeToString(hasher.Sum(nil))); ok && entry.Exp < now {
+		email = entry.Val.(UserID)
+		goto verifyGoogleCloudPolicyBindings
 	}
+
 	token = getGoogleToken()
 	defer putGoogleToken(token)
 	// Verify token validity, signature and audience.
-	if err = l.tokenService.NewGoogleToken(ctx, tokenString, token); err != nil || token.aud != audience {
+	if err = l.tokenService.NewGoogleToken(ctx, tokenString, aud, token); err != nil {
 		log.WithField("error", err).Debug("Failed generating or verifying token.")
 		w.WriteHeader(http.StatusProxyAuthRequired)
 		return
 	}
 	email = UserID(token.email)
-	// Append token to cache.
-	go func() {
-		params := cache.GetParams()
-		defer cache.PutParams(params)
-		// We only need to retain email from token - everything else is verified.
-		params.Val = email
-		params.Key = tokenHash
-		params.TTL = token.exp.Unix()
-		l.jwtCache.Set(params)
-	}()
+	// Append to cache.
+	go l.jwtCache.Set(tokenHash,
+		cache.ExpiryCacheValue{
+			Val: email,
+			Exp: token.exp.Unix(),
+		})
 	// Identify if user has role bindings in project.
 verifyGoogleCloudPolicyBindings:
 	bindings, err := l.policyReader.IdentityAwareProxyPolicyBindingForUser(email)
@@ -171,7 +163,7 @@ verifyGoogleCloudPolicyBindings:
 	params := map[string]any{
 		"request.path": requestURL.Path,
 		"request.host": requestURL.Host,
-		"request.time": time.Now(),
+		"request.time": now,
 	}
 	if len(bindings) == 1 && len(bindings[0].Expression) > 0 {
 		log.Debugf("User %s has single conditional policy expression. Evaluating.", email)
@@ -196,5 +188,5 @@ verifyGoogleCloudPolicyBindings:
 			return
 		}
 	}
-	log.Debugf("Processing successful request with email: %s and audience: %s.", email, audience)
+	log.Debugf("Processing successful request with email: %s and audience: %s.", email, aud)
 }

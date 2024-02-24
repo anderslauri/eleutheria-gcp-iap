@@ -17,7 +17,7 @@ Please reference [Google Cloud Token Types][Google Cloud Token Types] for more i
 
 ## Authentication of Google Cloud Service Account
 1. Signature verification using `JWK`. Source of `JWK` is determined given type of JWT.
-2. `iat` and `exp` claim verification. Clock skew is 30 seconds, meaning, `iat - <30 seconds>` and `exp + <30 seconds>`.
+2. `iat` and `exp` claim verification. Allow clock skew is 10 seconds.
 3. `aud` claim must be equal to request url.
 4. Role `roles/iap.httpsResourceAccessor` is verified given subject of claim email. Role binding can be granted directly on project,
    or indirectly, via membership in Google Workspace group.

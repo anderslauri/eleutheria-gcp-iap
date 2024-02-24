@@ -17,7 +17,6 @@ import (
 const (
 	googleIdToken           TokenType = "Id Token"
 	googleSelfSignedToken   TokenType = "Self Signed"
-	defaultLeeway                     = 30 * time.Second
 	publicGoogleCerts                 = "https://www.googleapis.com/oauth2/v3/certs"
 	selfSignedCertsPrefix             = "https://www.googleapis.com/service_accounts/v1/jwk/"
 	publicGoogleCertsIssuer           = "https://accounts.google.com"
@@ -26,9 +25,10 @@ const (
 // GoogleTokenService is a backend representation to manage authn/authz of Google Tokens.
 type GoogleTokenService struct {
 	jwkClient http.Client
-	jwkSet    cache.Cache
-	// keyFunc for issuer accounts.google.com - most commonly used.
-	publicKeyFunc atomic.Value
+	jwkCache  *cache.ExpiryCache
+	// publicKey is issuer accounts.google.com,
+	// most commonly used. Store directly here.
+	publicKey atomic.Value
 }
 
 // GoogleTokenClaims extends JWT with email claim.
@@ -62,9 +62,9 @@ var (
 )
 
 // NewGoogleTokenService creates a new token service for Google Tokens.
-func NewGoogleTokenService(ctx context.Context, jwkCache cache.Cache, refreshCertsInterval time.Duration) (*GoogleTokenService, error) {
+func NewGoogleTokenService(ctx context.Context, jwkCache *cache.ExpiryCache, refreshCertsInterval time.Duration) (*GoogleTokenService, error) {
 	googleTokenService := &GoogleTokenService{
-		jwkSet: jwkCache,
+		jwkCache: jwkCache,
 	}
 	// Load initial public certificates before starting.
 	err := googleTokenService.googleCertsRefresher(ctx, refreshCertsInterval)
@@ -107,7 +107,7 @@ func (t *GoogleTokenService) googleCertsRefresher(ctx context.Context, interval 
 		return err
 	}
 	log.Info("Public certificates successfully loaded. Persisting in cache.")
-	t.publicKeyFunc.Store(keySet)
+	t.publicKey.Store(keySet)
 	// Listener to ensure public certificates are kept fresh.
 	go func() {
 		log.Infof("Background routine started, ensuring fresh certificates. Interval is %s.", interval.String())
@@ -123,7 +123,7 @@ func (t *GoogleTokenService) googleCertsRefresher(ctx context.Context, interval 
 				if err := t.readGoogleCerts(ctx, publicGoogleCerts, buffer); err == nil {
 					keySet, err := keyfunc.NewJWKSetJSON(buffer.Bytes())
 					if err == nil {
-						t.publicKeyFunc.Store(keySet)
+						t.publicKey.Store(keySet)
 					}
 				}
 				putBuffer(buffer)
@@ -136,7 +136,7 @@ func (t *GoogleTokenService) googleCertsRefresher(ctx context.Context, interval 
 // keyFunc retrieve JWK from Google API or local cache. Mostly cache.
 func (t *GoogleTokenService) keyFunc(ctx context.Context, issuer string) (keyfunc.Keyfunc, error) {
 	if issuer == publicGoogleCertsIssuer {
-		return t.publicKeyFunc.Load().(keyfunc.Keyfunc), nil
+		return t.publicKey.Load().(keyfunc.Keyfunc), nil
 	}
 	buf := getBuffer()
 	defer putBuffer(buf)
@@ -147,7 +147,7 @@ func (t *GoogleTokenService) keyFunc(ctx context.Context, issuer string) (keyfun
 		ok     bool
 	)
 	// Should only be for self-signed tokens.
-	keySet, ok = t.jwkSet.Get(issuer)
+	keySet, ok = t.jwkCache.Get(issuer)
 	if !ok {
 		if err = t.readGoogleCerts(ctx,
 			fmt.Sprintf("%s%s", selfSignedCertsPrefix, issuer), buf); err != nil {
@@ -155,14 +155,12 @@ func (t *GoogleTokenService) keyFunc(ctx context.Context, issuer string) (keyfun
 		} else if keySet, err = keyfunc.NewJWKSetJSON(buf.Bytes()); err != nil {
 			return nil, ErrMissingJWK
 		}
-		// Avoid making this non-blocking.
-		go func(issuer string, val []byte) {
-			params := cache.GetParams()
-			defer cache.PutParams(params)
-			params.Key = issuer
-			params.Val = val
-			t.jwkSet.Set(params)
-		}(issuer, buf.Bytes())
+		// Append custom JWK to cache. Avoid making this non-blocking.
+		go t.jwkCache.Set(issuer,
+			cache.ExpiryCacheValue{
+				Val: buf.Bytes(),
+				Exp: time.Now().Add(24 * time.Hour).Unix(),
+			})
 		return keySet.(keyfunc.Keyfunc), nil
 	}
 	return keySet.(keyfunc.Keyfunc), nil
@@ -170,7 +168,7 @@ func (t *GoogleTokenService) keyFunc(ctx context.Context, issuer string) (keyfun
 
 // NewGoogleToken transform base64 encoded token string into a GoogleToken representation, performs both claim
 // assertion and verification that token is properly signed by Google or, by Google Service Account, JWK.
-func (t *GoogleTokenService) NewGoogleToken(ctx context.Context, tokenString string, googleToken *GoogleToken) error {
+func (t *GoogleTokenService) NewGoogleToken(ctx context.Context, tokenString, aud string, googleToken *GoogleToken) error {
 	var issuer string
 	// Identify issuer of token. This is a first pass - probably this should be optimized away.
 	token, _, err := new(jwt.Parser).ParseUnverified(tokenString, jwt.MapClaims{})
@@ -188,7 +186,7 @@ func (t *GoogleTokenService) NewGoogleToken(ctx context.Context, tokenString str
 	}
 
 	if token, err = jwt.ParseWithClaims(tokenString, tokenClaims, keySet.Keyfunc,
-		jwt.WithLeeway(defaultLeeway)); err != nil {
+		jwt.WithLeeway(10*time.Second), jwt.WithAudience(aud)); err != nil {
 		return err
 	} else if claims, ok := token.Claims.(*GoogleTokenClaims); ok && token.Valid {
 		// Ensure claim email and aud is present. Also set defined

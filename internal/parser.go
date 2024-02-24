@@ -36,13 +36,7 @@ func compileProgram(expression string) (cel.Program, error) {
 		return nil, err
 	}
 	// Don't block the caller when writing to cache.
-	go func() {
-		params := cache.GetParams()
-		defer cache.PutParams(params)
-		params.Val = prg
-		params.Key = expression
-		prgCache.Set(params)
-	}()
+	go prgCache.Set(expression, prg)
 	return prg, err
 }
 
