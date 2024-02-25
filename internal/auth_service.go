@@ -81,8 +81,8 @@ func NewListener(ctx context.Context, host, xHeaderUri string, port uint16,
 		tokenCache:            cache.NewExpiryCache(ctx, jwtCacheCleanInterval),
 	}
 	mux := http.NewServeMux()
-	mux.HandleFunc("/healthz", l.healthz)
-	mux.HandleFunc("/auth", l.auth)
+	mux.HandleFunc("GET /healthz", l.healthz)
+	mux.HandleFunc("GET /auth", l.auth)
 	l.service.Handler = mux
 	log.Info("Listener is successfully configured.")
 	return l, nil
