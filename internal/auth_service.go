@@ -134,8 +134,8 @@ func (l *listener) auth(w http.ResponseWriter, r *http.Request) {
 		claims    *GoogleTokenClaims
 	)
 	hasher := sha256.New()
-	// Verify is Google Service Account JWT is present within our local cache, if found and exp is good,
-	// go directly to role binding processing as token requires no re-processing given its valid status.
+	// Verify if Google Service Account JWT is present within local cache, if found and exp is valid,
+	// jump to role binding processing as token requires no re-processing given the fully valid status.
 	if _, err = hasher.Write([]byte(tokenHash)); err != nil {
 		log.WithField("error", err).Warning("hasher.Write: returned error. Unexpected.")
 	} else if entry, ok := l.tokenCache.Get(hex.EncodeToString(hasher.Sum(nil))); ok && entry.Exp < now {
