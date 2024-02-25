@@ -158,7 +158,7 @@ func (t *GoogleTokenService) keyFunc(ctx context.Context, issuer string) (keyfun
 		// Append custom JWK to cache. Avoid making this non-blocking.
 		go t.jwkCache.Set(issuer,
 			cache.ExpiryCacheValue{
-				Val: buf.Bytes(),
+				Val: buf.String(),
 				Exp: time.Now().Add(24 * time.Hour).Unix(),
 			})
 		return keySet.(keyfunc.Keyfunc), nil

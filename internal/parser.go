@@ -21,11 +21,11 @@ var celVars = func() *cel.Env {
 }()
 
 // Cache for compiled programs.
-var prgCache = cache.NewCopyOnWriteCache()
+var prgCache = cache.NewCopyOnWriteCache[string, cel.Program]()
 
 func compileProgram(expression string) (cel.Program, error) {
 	if p, ok := prgCache.Get(expression); ok {
-		return p.(cel.Program), nil
+		return p, nil
 	}
 	ast, issues := celVars.Compile(expression)
 	if issues != nil && issues.Err() != nil {

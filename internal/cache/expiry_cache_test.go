@@ -12,7 +12,7 @@ func TestExpiryCacheCleanerRoutine(t *testing.T) {
 	key := "test"
 	cache.Set(key,
 		ExpiryCacheValue{
-			Val: nil,
+			Val: "",
 			Exp: time.Now().Unix(),
 		})
 	for i := 0; i < 10; i++ {
