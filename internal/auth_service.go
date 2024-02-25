@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"github.com/MicahParks/keyfunc/v3"
 	"github.com/anderslauri/open-iap/internal/cache"
 	"github.com/golang-jwt/jwt/v5/request"
 	log "github.com/sirupsen/logrus"
@@ -25,7 +26,7 @@ type listener struct {
 	token                 TokenVerifier[*GoogleTokenClaims]
 	policyClient          PolicyBindingClientReader
 	googleWorkspaceClient GoogleWorkspaceClientReader
-	tokenCache            cache.Cache[string, cache.ExpiryCacheValue]
+	tokenCache            cache.Cache[string, cache.ExpiryCacheValue[UserID]]
 }
 
 // Listener is an interface for a listener implementation.
@@ -60,8 +61,9 @@ func NewListener(ctx context.Context, host, xHeaderUri string, port uint16,
 		return nil, err
 	}
 	log.Info("Starting client for Google Tokens.")
+
 	googleTokenService, err := NewGoogleTokenService(ctx,
-		cache.NewExpiryCache(ctx, jwkCacheCleanInterval), refreshPublicCertsInterval)
+		cache.NewExpiryCache[keyfunc.Keyfunc](ctx, refreshPublicCertsInterval), jwkCacheCleanInterval)
 	if err != nil {
 		return nil, err
 	}
@@ -69,7 +71,6 @@ func NewListener(ctx context.Context, host, xHeaderUri string, port uint16,
 	if err != nil {
 		return nil, err
 	}
-
 	l := &listener{
 		service:               &http.Server{},
 		tcpListener:           tcpListener,
@@ -78,7 +79,7 @@ func NewListener(ctx context.Context, host, xHeaderUri string, port uint16,
 		port:                  tcpListener.Addr().(*net.TCPAddr).Port,
 		policyClient:          policyBindingClient,
 		googleWorkspaceClient: googleWorkspaceClient,
-		tokenCache:            cache.NewExpiryCache(ctx, jwtCacheCleanInterval),
+		tokenCache:            cache.NewExpiryCache[UserID](ctx, jwtCacheCleanInterval),
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", l.healthz)
@@ -132,14 +133,13 @@ func (l *listener) auth(w http.ResponseWriter, r *http.Request) {
 		email     UserID
 		claims    *GoogleTokenClaims
 	)
-
 	hasher := sha256.New()
 	// Verify is Google Service Account JWT is present within our local cache, if found and exp is good,
 	// go directly to role binding processing as token requires no re-processing given its valid status.
 	if _, err = hasher.Write([]byte(tokenHash)); err != nil {
 		log.WithField("error", err).Warning("hasher.Write: returned error. Unexpected.")
 	} else if entry, ok := l.tokenCache.Get(hex.EncodeToString(hasher.Sum(nil))); ok && entry.Exp < now {
-		email = UserID(entry.Val)
+		email = entry.Val
 		goto verifyGoogleCloudPolicyBindings
 	}
 
@@ -154,8 +154,8 @@ func (l *listener) auth(w http.ResponseWriter, r *http.Request) {
 	email = UserID(claims.Email)
 	// Append to cache.
 	go l.tokenCache.Set(tokenHash,
-		cache.ExpiryCacheValue{
-			Val: string(email),
+		cache.ExpiryCacheValue[UserID]{
+			Val: email,
 			Exp: claims.ExpiresAt.Unix(),
 		})
 	// Identify if user has role bindings in project.

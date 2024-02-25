@@ -10,9 +10,9 @@ var (
 )
 
 func TestNewCopyOnWriteCache(t *testing.T) {
-	copyWriteCache := cache.NewCopyOnWriteCache[string, cache.ExpiryCacheValue]()
+	copyWriteCache := cache.NewCopyOnWriteCache[string, cache.ExpiryCacheValue[string]]()
 	copyWriteCache.Set(defaultCacheKey,
-		cache.ExpiryCacheValue{
+		cache.ExpiryCacheValue[string]{
 			Val: "",
 			Exp: 0,
 		})

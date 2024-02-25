@@ -7,11 +7,11 @@ import (
 )
 
 func TestExpiryCacheCleanerRoutine(t *testing.T) {
-	cache := NewExpiryCache(context.Background(), 50*time.Millisecond)
+	cache := NewExpiryCache[string](context.Background(), 50*time.Millisecond)
 
 	key := "test"
 	cache.Set(key,
-		ExpiryCacheValue{
+		ExpiryCacheValue[string]{
 			Val: "",
 			Exp: time.Now().Unix(),
 		})

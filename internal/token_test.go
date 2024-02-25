@@ -2,6 +2,7 @@ package internal_test
 
 import (
 	"context"
+	"github.com/MicahParks/keyfunc/v3"
 	"github.com/anderslauri/open-iap/internal"
 	"github.com/anderslauri/open-iap/internal/cache"
 	"golang.org/x/oauth2/google"
@@ -30,7 +31,7 @@ func requestUserGoogleIdToken(ctx context.Context, aud string) (string, error) {
 
 func newTokenService(ctx context.Context) (*internal.GoogleTokenService, error) {
 	defaultInterval := 5 * time.Minute
-	jwkCache := cache.NewExpiryCache(ctx, defaultInterval)
+	jwkCache := cache.NewExpiryCache[keyfunc.Keyfunc](ctx, defaultInterval)
 	tokenService, err := internal.NewGoogleTokenService(ctx, jwkCache, defaultInterval)
 	if err != nil {
 		return nil, err

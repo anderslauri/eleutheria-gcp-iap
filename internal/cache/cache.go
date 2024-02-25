@@ -6,7 +6,7 @@ import (
 	"sync/atomic"
 )
 
-// Cache is a very generic cache interface to support an array of underlying implementations.
+// Cache is a very broad cache interface to support an array of underlying implementations.
 type Cache[K comparable, V any] interface {
 	Set(key K, val V)
 	Get(key K) (V, bool)
