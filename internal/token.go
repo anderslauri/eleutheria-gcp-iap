@@ -161,7 +161,7 @@ func (t *GoogleTokenService) Verify(ctx context.Context, tokenString, aud string
 		keySet.Keyfunc, jwt.WithLeeway(10*time.Second), jwt.WithAudience(aud))
 	if err != nil {
 		return err
-	} else if _, ok := token.Claims.(*GoogleTokenClaims); !ok || !token.Valid {
+	} else if googleToken, ok := token.Claims.(*GoogleTokenClaims); !ok || !token.Valid || len(googleToken.Email) == 0 {
 		return ErrUnknownTokenType
 	}
 	return nil
