@@ -19,23 +19,6 @@ var googleTokenClaimsPool = sync.Pool{
 	},
 }
 
-var googleTokenPool = sync.Pool{
-	New: func() interface{} {
-		return &GoogleToken{}
-	},
-}
-
-func getGoogleToken() *GoogleToken {
-	return googleTokenPool.Get().(*GoogleToken)
-}
-
-func putGoogleToken(googleToken *GoogleToken) {
-	googleToken.email = ""
-	googleToken.aud = ""
-	googleToken.issuer = ""
-	googleTokenPool.Put(googleToken)
-}
-
 func getGoogleTokenClaims() *GoogleTokenClaims {
 	return googleTokenClaimsPool.Get().(*GoogleTokenClaims)
 }

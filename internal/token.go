@@ -15,48 +15,36 @@ import (
 )
 
 const (
-	googleIdToken           TokenType = "Id Token"
-	googleSelfSignedToken   TokenType = "Self Signed"
-	publicGoogleCerts                 = "https://www.googleapis.com/oauth2/v3/certs"
-	selfSignedCertsPrefix             = "https://www.googleapis.com/service_accounts/v1/jwk/"
-	publicGoogleCertsIssuer           = "https://accounts.google.com"
+	publicGoogleCerts       = "https://www.googleapis.com/oauth2/v3/certs"
+	selfSignedCertsPrefix   = "https://www.googleapis.com/service_accounts/v1/jwk/"
+	publicGoogleCertsIssuer = "https://accounts.google.com"
 )
 
 // GoogleTokenService is a backend representation to manage authn/authz of Google Tokens.
 type GoogleTokenService struct {
 	jwkClient http.Client
-	jwkCache  *cache.ExpiryCache
+	jwkCache  cache.Cache[string, cache.ExpiryCacheValue]
 	// publicKey is issuer accounts.google.com,
 	// most commonly used. Store directly here.
-	publicKey atomic.Value
+	publicKey atomic.Pointer[keyfunc.Keyfunc]
 }
 
-// GoogleTokenClaims extends JWT with email claim.
+// GoogleTokenClaims extends standard JWT claims with claim email.
 type GoogleTokenClaims struct {
 	Email string `json:"email"`
 	jwt.RegisteredClaims
 }
 
-// GoogleToken is an implementation of Token interface.
-type GoogleToken struct {
-	aud    string
-	email  string
-	issuer string
-	iat    time.Time
-	exp    time.Time
-	typeOf TokenType
+// TokenVerifier is a generic interface as implemented by Google Token.
+type TokenVerifier[V any] interface {
+	Verify(ctx context.Context, tokenString, aud string, token V) error
 }
-
-// TokenType is a custom type definition for types of Google tokens which are supported.
-type TokenType string
 
 var (
 	// ErrUnknownTokenType is given when no error is present, however, token type is not identifiable.
 	ErrUnknownTokenType = errors.New("unknown token type")
 	// ErrMissingEmailClaim is given when claim email is not present.
 	ErrMissingEmailClaim = errors.New("missing email claim")
-	// ErrMissingAudClaim is given when claim audience claim is not present.
-	ErrMissingAudClaim = errors.New("missing aud claim")
 	// ErrMissingJWK is given when no JWK can be found in cache or retrieved.
 	ErrMissingJWK = errors.New("missing jwk")
 )
@@ -102,12 +90,13 @@ func (t *GoogleTokenService) googleCertsRefresher(ctx context.Context, interval 
 	if err := t.readGoogleCerts(ctx, publicGoogleCerts, buffer); err != nil {
 		return err
 	}
+
 	keySet, err := keyfunc.NewJWKSetJSON(buffer.Bytes())
 	if err != nil {
 		return err
 	}
 	log.Info("Public certificates successfully loaded. Persisting in cache.")
-	t.publicKey.Store(keySet)
+	t.publicKey.Store(&keySet)
 	// Listener to ensure public certificates are kept fresh.
 	go func() {
 		log.Infof("Background routine started, ensuring fresh certificates. Interval is %s.", interval.String())
@@ -121,9 +110,8 @@ func (t *GoogleTokenService) googleCertsRefresher(ctx context.Context, interval 
 			case <-ticker.C:
 				buffer = getBuffer()
 				if err := t.readGoogleCerts(ctx, publicGoogleCerts, buffer); err == nil {
-					keySet, err := keyfunc.NewJWKSetJSON(buffer.Bytes())
-					if err == nil {
-						t.publicKey.Store(keySet)
+					if keySet, err := keyfunc.NewJWKSetJSON(buffer.Bytes()); err == nil {
+						t.publicKey.Store(&keySet)
 					}
 				}
 				putBuffer(buffer)
@@ -136,7 +124,7 @@ func (t *GoogleTokenService) googleCertsRefresher(ctx context.Context, interval 
 // keyFunc retrieve JWK from Google API or local cache. Mostly cache.
 func (t *GoogleTokenService) keyFunc(ctx context.Context, issuer string) (keyfunc.Keyfunc, error) {
 	if issuer == publicGoogleCertsIssuer {
-		return t.publicKey.Load().(keyfunc.Keyfunc), nil
+		return *t.publicKey.Load(), nil
 	}
 	buf := getBuffer()
 	defer putBuffer(buf)
@@ -146,7 +134,7 @@ func (t *GoogleTokenService) keyFunc(ctx context.Context, issuer string) (keyfun
 		err    error
 		ok     bool
 	)
-	// Should only be for self-signed tokens.
+	// Only be for self-signed tokens.
 	keySet, ok = t.jwkCache.Get(issuer)
 	if !ok {
 		if err = t.readGoogleCerts(ctx,
@@ -166,48 +154,27 @@ func (t *GoogleTokenService) keyFunc(ctx context.Context, issuer string) (keyfun
 	return keySet.(keyfunc.Keyfunc), nil
 }
 
-// NewGoogleToken transform base64 encoded token string into a GoogleToken representation, performs both claim
-// assertion and verification that token is properly signed by Google or, by Google Service Account, JWK.
-func (t *GoogleTokenService) NewGoogleToken(ctx context.Context, tokenString, aud string, googleToken *GoogleToken) error {
-	var issuer string
-	// Identify issuer of token. This is a first pass - probably this should be optimized away.
+// Verify transform base64 encoded token string into a Token representation while verifying claims and audience.
+func (t *GoogleTokenService) Verify(ctx context.Context, tokenString, aud string, tokenClaims *GoogleTokenClaims) error {
+	// This is a first pass. Optimize away. Identifying issuer of token.
 	token, _, err := new(jwt.Parser).ParseUnverified(tokenString, jwt.MapClaims{})
 	if err != nil {
 		return err
 	}
-	issuer, _ = token.Claims.GetIssuer()
-
-	tokenClaims := getGoogleTokenClaims()
-	defer putGoogleTokenClaims(tokenClaims)
+	issuer, _ := token.Claims.GetIssuer()
 
 	keySet, err := t.keyFunc(ctx, issuer)
 	if err != nil {
 		return err
 	}
 
-	if token, err = jwt.ParseWithClaims(tokenString, tokenClaims, keySet.Keyfunc,
-		jwt.WithLeeway(10*time.Second), jwt.WithAudience(aud)); err != nil {
+	token, err = jwt.ParseWithClaims(tokenString, tokenClaims,
+		keySet.Keyfunc, jwt.WithLeeway(10*time.Second), jwt.WithAudience(aud))
+	if err != nil {
 		return err
-	} else if claims, ok := token.Claims.(*GoogleTokenClaims); ok && token.Valid {
-		// Ensure claim email and aud is present. Also set defined
-		// type of token given issuer value. If self-signed, issuer
-		// will be equal to claim of email (service account).
-		switch {
-		case len(claims.Email) == 0:
-			return ErrMissingEmailClaim
-		case len(claims.Audience) == 0:
-			return ErrMissingAudClaim
-		case claims.Email == claims.Issuer:
-			googleToken.typeOf = googleSelfSignedToken
-		default:
-			googleToken.typeOf = googleIdToken
-		}
-		googleToken.exp = claims.ExpiresAt.Time
-		googleToken.iat = claims.IssuedAt.Time
-		googleToken.issuer = claims.Issuer
-		googleToken.aud = claims.Audience[0]
-		googleToken.email = claims.Email
-		return nil
 	}
-	return ErrUnknownTokenType
+	if _, ok := token.Claims.(*GoogleTokenClaims); !ok || !token.Valid {
+		return ErrUnknownTokenType
+	}
+	return nil
 }

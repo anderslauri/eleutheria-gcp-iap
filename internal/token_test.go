@@ -45,9 +45,9 @@ func TestNewGoogleTokenGeneration(t *testing.T) {
 	aud := "https://myurl.com"
 	tokenService, _ := newTokenService(ctx)
 	idToken, _ := requestUserGoogleIdToken(ctx, aud)
-	token := &internal.GoogleToken{}
+	token := &internal.GoogleTokenClaims{}
 
-	if err := tokenService.NewGoogleToken(ctx, idToken, aud, token); err != nil {
+	if err := tokenService.Verify(ctx, idToken, aud, token); err != nil {
 		t.Fatalf("Expected no error from token, error returned: %s", err)
 	}
 }
@@ -57,12 +57,12 @@ func BenchmarkNewGoogleTokenService(b *testing.B) {
 	defer cancel()
 
 	aud := "https://myurl.com"
-	token := &internal.GoogleToken{}
+	token := &internal.GoogleTokenClaims{}
 	tokenService, _ := newTokenService(ctx)
 	idToken, _ := requestUserGoogleIdToken(ctx, aud)
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		_ = tokenService.NewGoogleToken(ctx, idToken, aud, token)
+		_ = tokenService.Verify(ctx, idToken, aud, token)
 	}
 }

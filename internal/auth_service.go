@@ -8,6 +8,8 @@ import (
 	"github.com/anderslauri/open-iap/internal/cache"
 	"github.com/golang-jwt/jwt/v5/request"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/oauth2/google"
+	admin "google.golang.org/api/admin/directory/v1"
 	"net"
 	"net/http"
 	"net/url"
@@ -19,11 +21,11 @@ type listener struct {
 	service               *http.Server
 	tcpListener           net.Listener
 	port                  int
-	xHeaderURI            string
-	tokenService          *GoogleTokenService
-	policyReader          PolicyReader
-	googleWorkspaceClient GoogleWorkspaceReader
-	jwtCache              *cache.ExpiryCache
+	xOriginalHeader       string
+	token                 TokenVerifier[*GoogleTokenClaims]
+	policyClient          PolicyBindingClientReader
+	googleWorkspaceClient GoogleWorkspaceClientReader
+	tokenCache            cache.Cache[string, cache.ExpiryCacheValue]
 }
 
 // Listener is an interface for a listener implementation.
@@ -38,14 +40,22 @@ func NewListener(ctx context.Context, host, xHeaderUri string, port uint16,
 	refreshPublicCertsInterval, jwkCacheCleanInterval, jwtCacheCleanInterval,
 	policyBindingRefreshInterval time.Duration) (Listener, error) {
 
-	log.Info("Starting client for Google Workspace.")
-	googleWorkspaceReaderClient, err := NewGoogleWorkspaceReader(ctx)
+	credentials, err := google.FindDefaultCredentials(ctx,
+		admin.AdminDirectoryGroupScope,
+		// TODO: What const is this?
+		"https://www.googleapis.com/auth/cloud-platform.read-only",
+	)
 	if err != nil {
 		return nil, err
 	}
-	log.Info("Starting client for Project policy bindings and conditional expressions.")
-	policyReaderService, err := NewProjectPolicyReaderService(ctx,
-		googleWorkspaceReaderClient, policyBindingRefreshInterval)
+	log.Info("Loading new reader client for Google Workspace.")
+	googleWorkspaceClient, err := NewGoogleWorkspaceClient(ctx, credentials)
+	if err != nil {
+		return nil, err
+	}
+	log.Info("Loading new client for project policy bindings and conditional expressions identification.")
+	policyBindingClient, err := NewPolicyBindingClient(ctx,
+		googleWorkspaceClient, credentials, policyBindingRefreshInterval)
 	if err != nil {
 		return nil, err
 	}
@@ -63,12 +73,12 @@ func NewListener(ctx context.Context, host, xHeaderUri string, port uint16,
 	l := &listener{
 		service:               &http.Server{},
 		tcpListener:           tcpListener,
-		xHeaderURI:            xHeaderUri,
-		tokenService:          googleTokenService,
+		xOriginalHeader:       xHeaderUri,
+		token:                 googleTokenService,
 		port:                  tcpListener.Addr().(*net.TCPAddr).Port,
-		policyReader:          policyReaderService,
-		googleWorkspaceClient: googleWorkspaceReaderClient,
-		jwtCache:              cache.NewExpiryCache(ctx, jwtCacheCleanInterval),
+		policyClient:          policyBindingClient,
+		googleWorkspaceClient: googleWorkspaceClient,
+		tokenCache:            cache.NewExpiryCache(ctx, jwtCacheCleanInterval),
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", l.healthz)
@@ -103,7 +113,7 @@ func (l *listener) auth(w http.ResponseWriter, r *http.Request) {
 		"X-Forwarded-Proxy-Authorization",
 		"X-Forwarded-Authorization"}.ExtractToken(r)
 	// Extract request url.
-	requestURL, err := url.Parse(r.Header.Get(l.xHeaderURI))
+	requestURL, err := url.Parse(r.Header.Get(l.xOriginalHeader))
 	if err != nil || (len(tokenString) < 7 || !strings.EqualFold(tokenString[:7], "bearer:")) {
 		log.WithField("error", err).Debug("Failed to parse request url or token header value.")
 		w.WriteHeader(http.StatusProxyAuthRequired)
@@ -120,7 +130,7 @@ func (l *listener) auth(w http.ResponseWriter, r *http.Request) {
 		now       = time.Now().Unix()
 		tokenHash = fmt.Sprintf("%s:%s", tokenString, aud)
 		email     UserID
-		token     *GoogleToken
+		claims    *GoogleTokenClaims
 	)
 
 	hasher := sha256.New()
@@ -128,29 +138,29 @@ func (l *listener) auth(w http.ResponseWriter, r *http.Request) {
 	// go directly to role binding processing as token requires no re-processing given its valid status.
 	if _, err = hasher.Write([]byte(tokenHash)); err != nil {
 		log.WithField("error", err).Warning("hasher.Write: returned error. Unexpected.")
-	} else if entry, ok := l.jwtCache.Get(hex.EncodeToString(hasher.Sum(nil))); ok && entry.Exp < now {
+	} else if entry, ok := l.tokenCache.Get(hex.EncodeToString(hasher.Sum(nil))); ok && entry.Exp < now {
 		email = UserID(entry.Val)
 		goto verifyGoogleCloudPolicyBindings
 	}
 
-	token = getGoogleToken()
-	defer putGoogleToken(token)
+	claims = getGoogleTokenClaims()
+	defer putGoogleTokenClaims(claims)
 	// Verify token validity, signature and audience.
-	if err = l.tokenService.NewGoogleToken(ctx, tokenString, aud, token); err != nil {
+	if err = l.token.Verify(ctx, tokenString, aud, claims); err != nil {
 		log.WithField("error", err).Debug("Failed generating or verifying token.")
 		w.WriteHeader(http.StatusProxyAuthRequired)
 		return
 	}
-	email = UserID(token.email)
+	email = UserID(claims.Email)
 	// Append to cache.
-	go l.jwtCache.Set(tokenHash,
+	go l.tokenCache.Set(tokenHash,
 		cache.ExpiryCacheValue{
 			Val: string(email),
-			Exp: token.exp.Unix(),
+			Exp: claims.ExpiresAt.Unix(),
 		})
 	// Identify if user has role bindings in project.
 verifyGoogleCloudPolicyBindings:
-	bindings, err := l.policyReader.IdentityAwareProxyPolicyBindingForUser(email)
+	bindings, err := l.policyClient.IdentityAwareProxyPolicyBindingForUser(email)
 	if err != nil {
 		log.WithField("error", err).Warningf("No policy role binding found for user %s.", email)
 		w.WriteHeader(http.StatusProxyAuthRequired)

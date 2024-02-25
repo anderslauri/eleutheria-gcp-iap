@@ -34,10 +34,10 @@ func (c *CopyOnWriteCache[K, V]) Delete(del func(key K, val V) bool) {
 	c.dLock.Lock()
 	orgMap := *c.cache.Load()
 
-	keysToDelete := make([]K, 0, 100)
+	keysToDelete := make(map[K]struct{}, 100)
 	for k, v := range orgMap {
 		if ok := del(k, v); ok {
-			keysToDelete = append(keysToDelete, k)
+			keysToDelete[k] = struct{}{}
 		}
 	}
 	c.dLock.Unlock()
@@ -46,9 +46,13 @@ func (c *CopyOnWriteCache[K, V]) Delete(del func(key K, val V) bool) {
 	}
 	c.wLock.Lock()
 	defer c.wLock.Unlock()
+
 	newMap := make(Map[K, V], len(orgMap)-len(keysToDelete))
-	for _, key := range keysToDelete {
-		delete(newMap, key)
+	for key, value := range orgMap {
+		if _, ok := keysToDelete[key]; ok {
+			continue
+		}
+		newMap[key] = value
 	}
 	c.cache.Store(&newMap)
 }

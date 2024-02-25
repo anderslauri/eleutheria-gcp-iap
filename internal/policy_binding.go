@@ -14,10 +14,10 @@ import (
 
 // ProjectPolicyReaderService is a service implementation to retrieve bindings from Google Cloud.
 type ProjectPolicyReaderService struct {
-	service            *cloudresourcemanager.Service
-	pid                string
-	roleCollectionCopy atomic.Value
-	reader             GoogleWorkspaceReader
+	service               *cloudresourcemanager.Service
+	pid                   string
+	roleCollectionCopy    atomic.Value
+	googleWorkspaceClient GoogleWorkspaceClientReader
 }
 
 // PolicyBinding is a struct to retain policy information (of what is relevant).
@@ -43,17 +43,15 @@ type PolicyBindingCollection map[Role]PolicyBindings
 // UserRoleCollection is a collection of user id to bindings per role.
 type UserRoleCollection map[UserID]PolicyBindingCollection
 
-// PolicyReader is an interface to abstract PolicyBindingService.
-type PolicyReader interface {
+// PolicyBindingClientReader is an interface to abstract PolicyBindingService.
+type PolicyBindingClientReader interface {
 	LoadUsersWithRoleForIdentityAwareProxy(ctx context.Context) error
 	IdentityAwareProxyPolicyBindingForUser(uid UserID) (PolicyBindings, error)
 	UserRoleCollection() UserRoleCollection
 }
 
-var (
-	// ErrNoIdentityAwareProxyRoleForUser is returned when user does not have role for IAP.
-	ErrNoIdentityAwareProxyRoleForUser = errors.New("no iap role found")
-)
+// ErrNoIdentityAwareProxyRoleForUser is returned when user does not have role for IAP.
+var ErrNoIdentityAwareProxyRoleForUser = errors.New("no iap role found")
 
 // IdentityAwareProxyPolicyBindingForUser look up which bindings (roles and expressions) a user have.
 func (p *ProjectPolicyReaderService) IdentityAwareProxyPolicyBindingForUser(uid UserID) (PolicyBindings, error) {
@@ -65,26 +63,22 @@ func (p *ProjectPolicyReaderService) IdentityAwareProxyPolicyBindingForUser(uid 
 	return val[iapRole], nil
 }
 
-// NewProjectPolicyReaderService generates an implementation of PolicyBindingReader.
-func NewProjectPolicyReaderService(ctx context.Context, reader GoogleWorkspaceReader, refreshInterval time.Duration) (*ProjectPolicyReaderService, error) {
-	credentials, err := google.FindDefaultCredentials(ctx,
-		"https://www.googleapis.com/auth/cloud-platform.read-only")
-	if err != nil {
-		return nil, err
-	}
+// NewPolicyBindingClient generates an implementation of PolicyBindingReader.
+func NewPolicyBindingClient(ctx context.Context, googleWorkspaceClient GoogleWorkspaceClientReader,
+	credentials *google.Credentials, refresh time.Duration) (*ProjectPolicyReaderService, error) {
 	service, err := cloudresourcemanager.NewService(ctx, option.WithCredentials(credentials))
 	if err != nil {
 		return nil, err
 	}
 	ps := &ProjectPolicyReaderService{
-		service: service,
-		pid:     credentials.ProjectID,
-		reader:  reader,
+		service:               service,
+		pid:                   credentials.ProjectID,
+		googleWorkspaceClient: googleWorkspaceClient,
 	}
 	if err = ps.LoadUsersWithRoleForIdentityAwareProxy(ctx); err != nil {
 		return nil, err
 	}
-	go ps.refreshProjectPolicyBindings(ctx, refreshInterval)
+	go ps.refreshProjectPolicyBindings(ctx, refresh)
 	return ps, nil
 }
 
@@ -142,7 +136,7 @@ func (p *ProjectPolicyReaderService) LoadUsersWithRoleForIdentityAwareProxy(ctx 
 			)
 			// Reference to Group in Google Workspace. Expand group to include members.
 			if strings.HasPrefix(user, "group:") {
-				membersInGroup, err := p.reader.ListMembersInGroup(ctx, string(uid))
+				membersInGroup, err := p.googleWorkspaceClient.MembersInGroup(ctx, string(uid))
 				if err != nil {
 					log.WithField("error", err).Error("Can't retrieve members from group in Google workspace.")
 					continue
