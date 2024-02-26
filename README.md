@@ -49,7 +49,7 @@ and `app_config.pkl` must be present in same directory as application executable
 ### Google Service Account Permissions
 * **Groups Reader** is required on Google Workspace. Reference [Google Workspace Administrator Roles][Google Workspace Administrator Roles].
 * **get-iam-policy** is required to list all bindings for role `roles/iap.httpsResourceAccess`. Custom role is recommended.
-* **Admin API** is required on project to enable access to `Directory API`.
+* **Admin API** and **Cloud Resource Manager API ** is required on project.
 
 ## API 
 
