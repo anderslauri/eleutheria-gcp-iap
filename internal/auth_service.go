@@ -42,7 +42,7 @@ func NewListener(ctx context.Context, host, xHeaderUri string, port uint16,
 	policyBindingRefreshInterval time.Duration) (Listener, error) {
 
 	credentials, err := google.FindDefaultCredentials(ctx,
-		admin.AdminDirectoryGroupScope,
+		admin.AdminDirectoryGroupReadonlyScope,
 		// TODO: What const is this?
 		"https://www.googleapis.com/auth/cloud-platform.read-only",
 	)
