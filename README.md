@@ -46,9 +46,9 @@ expressions are only compiled once - after first compilation - the program (repr
 Configuration uses [pkl-lang][pkl-lang]. `pkl` must be available in `$PATH`. As well, `default_config.pkl` 
 and `app_config.pkl` must be present in same directory as application executable when starting application.
 
-### Google Service Account Permissions
+### Required Prerequisites
 * **Groups Reader** is required on Google Workspace. Reference [Google Workspace Administrator Roles][Google Workspace Administrator Roles].
-* **get-iam-policy** is required to list all bindings for role `roles/iap.httpsResourceAccess`. Custom role is recommended.
+* **get-iam-policy** is required to list all bindings for role `roles/iap.httpsResourceAccess` for Google Service Account. Custom role is recommended!
 * **Admin API** and **Cloud Resource Manager API** is required on project.
 
 ## API 
