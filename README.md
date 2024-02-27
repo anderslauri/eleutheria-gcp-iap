@@ -26,7 +26,7 @@ Please reference [Google Cloud Token Types][Google Cloud Token Types] for more i
 the ideas of `Identity Aware Proxy`.
 
 :exclamation: After successful `{1..4}`. Value of claim `email` is cached. Key is hash, in `SHA256`, of `{JWT || Request URL}`. 
-`ttl` for cache value is `exp - <interval of cleaning routine>`. Once token is found in cache - only step `4` is performed per each request.
+`ttl` for cache value is `exp - <interval of cleaning routine>`. Once token is found in cache - only `exp` claim validity and step `4` is performed per each request.
 
 :exclamation: The code strives to retain a performance aware profile. Caching is used aggressivly on multiple layers to ensure an overall
 low 90th percentile response time. To benefit from cache locality, use a ring hash for routing.
