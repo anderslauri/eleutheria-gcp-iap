@@ -4,7 +4,7 @@ RUN curl -L -o /tmp/pkl https://github.com/apple/pkl/releases/download/0.25.2/pk
 RUN mv /tmp/pkl /usr/bin/pkl && chmod +x /usr/bin/pkl && pkl --version
 WORKDIR $GOPATH/src/github.com/anderslauri/open-iap
 COPY . .
-RUN go install github.com/apple/pkl-go/cmd/pkl-gen-go@v0.5.3 && pkl-gen-go default_config.pkl
+RUN go install github.com/apple/pkl-go/cmd/pkl-gen-go@v0.5.3 && pkl-gen-go default_config.pkl && go mod tidy
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -tags timetzdata -ldflags="-w -s" -o /go/bin/open-iap
 
 FROM golang:1.22-alpine as open-iap
