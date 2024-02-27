@@ -59,7 +59,7 @@ Authentication endpoint. Return code `200 OK` given successful authentication, e
 #### Required headers
 :warning: `X-Original-URI`, i.e. from `nginx` has assumed trust.
 
-1. `X-Authorization` or `X-Proxy-Authorization`.
+1. `Authorization` or `Proxy-Authorization`.
 2. `X-Original-URI` is configured to be present. This can be changed using `HeaderMapping` in configuration.
 
 ### /healthz (GET)

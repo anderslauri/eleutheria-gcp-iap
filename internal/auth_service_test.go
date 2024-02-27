@@ -68,7 +68,7 @@ func TestAuthWithValidIdentityToken(t *testing.T) {
 		t.Fatalf("Unexpected error returned, error: %s.", err)
 	}
 	req, _ := http.NewRequestWithContext(ctx, "GET", requestUrl(listener.Port(), "auth"), nil)
-	req.Header.Set("X-Proxy-Authorization", fmt.Sprintf("Bearer: %s", idToken))
+	req.Header.Set("Proxy-Authorization", fmt.Sprintf("Bearer: %s", idToken))
 	req.Header.Set("X-Original-URI", "https://myurl.com/hello")
 
 	rsp, err := httpClient.Do(req)

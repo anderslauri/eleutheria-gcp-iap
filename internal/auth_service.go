@@ -110,9 +110,7 @@ func (l *listener) healthz(w http.ResponseWriter, r *http.Request) {
 
 func (l *listener) auth(w http.ResponseWriter, r *http.Request) {
 	// Extract bearer token.
-	tokenString, _ := request.HeaderExtractor{
-		"X-Proxy-Authorization",
-		"X-Authorization"}.ExtractToken(r)
+	tokenString, _ := request.HeaderExtractor{"Proxy-Authorization", "Authorization"}.ExtractToken(r)
 	// Extract request url.
 	requestURL, err := url.Parse(r.Header.Get(l.xOriginalHeader))
 	if err != nil || (len(tokenString) < 7 || !strings.EqualFold(tokenString[:7], "bearer:")) {
