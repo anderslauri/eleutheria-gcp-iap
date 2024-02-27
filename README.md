@@ -59,7 +59,7 @@ Authentication endpoint. Return code `200 OK` given successful authentication, e
 #### Example nginx
 The following configuration is an example how to use `auth` through `nginx`. This example applicable for GKE.
 
-:exclamation: Use `NetworkPolicy` for `ingress` to further restrict connectivity to `/auth` API.
+:exclamation: Use `NetworkPolicy` for `Open IAP` to restrict connectivity to `/auth`.
 
 #### Global configuration nginx
 ```
