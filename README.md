@@ -17,7 +17,7 @@ Please reference [Google Cloud Token Types][Google Cloud Token Types] for more i
 
 ## Authentication of Google Cloud Service Account
 1. Signature verification using `JWK`. Source of `JWK` is determined given type of JWT.
-2. `iat` and `exp` claim verification. Allow clock skew is 10 seconds.
+2. `iat` and `exp` claim verification. Allowed clock skew is 10 seconds.
 3. `aud` claim must be equal to request url.
 4. Role `roles/iap.httpsResourceAccessor` is verified given subject of claim email. Role binding can be granted directly on project,
    or indirectly, via membership in Google Workspace group.
@@ -54,7 +54,19 @@ and `app_config.pkl` must be present in same directory as application executable
 ## API 
 
 ### /auth (GET)
-Authentication endpoint. Return code `200 OK` given successful authentication, else `407 Proxy Authentication Required`.
+Authentication endpoint. Return code `200 OK` given successful authentication, else `401 Unauthorized`.
+
+#### Example nginx
+The following configuration is an example how to use `auth` through `nginx`. This example applicable for GKE.
+
+:exclamation: Use `NetworkPolicy` for `ingress` to further restrict connectivity to `/auth` API.
+
+#### Global configuration nginx
+```
+global-auth-snippet: |
+  proxy_set_header Proxy-Authorization $http_proxy_authorization;
+global-auth-url: http://<service name>.<namespace>:8080/auth
+```
 
 #### Required headers
 :warning: `X-Original-URI`, i.e. from `nginx` has assumed trust.

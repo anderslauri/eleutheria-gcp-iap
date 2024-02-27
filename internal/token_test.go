@@ -26,6 +26,7 @@ func requestUserGoogleIdToken(ctx context.Context, aud string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+
 	return serviceAccountIdToken.AccessToken, nil
 }
 
