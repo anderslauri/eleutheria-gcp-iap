@@ -61,7 +61,7 @@ The following configuration, within GKE, is an example how to use `auth` through
 
 :exclamation: Use `NetworkPolicy` for `Open IAP` to restrict connectivity to `/auth`.
 
-#### Global configuration nginx
+##### Global configuration nginx
 ```
 global-auth-snippet: |
   proxy_set_header Proxy-Authorization $http_proxy_authorization;
