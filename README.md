@@ -69,10 +69,10 @@ global-auth-url: http://<service name>.<namespace>:8080/auth
 ```
 
 #### Required headers
-:warning: `X-Original-URI`, i.e. from `nginx` has assumed trust.
+:warning: `X-Original-URL`, i.e. from `nginx` has assumed trust.
 
 1. `Authorization` or `Proxy-Authorization`.
-2. `X-Original-URI` is configured to be present. This can be changed using `HeaderMapping` in configuration.
+2. `X-Original-URL` is configured to be present. This can be changed using `HeaderMapping` in configuration.
 
 ### /healthz (GET)
 Kubernetes health endpoint for liveness and readiness. Return code `200 OK`.
