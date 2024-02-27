@@ -109,11 +109,11 @@ func (l *listener) healthz(w http.ResponseWriter, r *http.Request) {
 }
 
 func (l *listener) auth(w http.ResponseWriter, r *http.Request) {
-	// Extract bearer token.
 	tokenString, _ := request.HeaderExtractor{"Proxy-Authorization", "Authorization"}.ExtractToken(r)
-	// Extract request url.
 	requestURL, err := url.Parse(r.Header.Get(l.xOriginalHeader))
-	if err != nil || (len(tokenString) < 7 || !strings.EqualFold(tokenString[:7], "bearer:")) {
+	// Ensure both request url and tokenString are valid.
+	if err != nil || len(requestURL.String()) == 0 ||
+		(len(tokenString) < 7 || !strings.EqualFold(tokenString[:7], "bearer:")) {
 		log.WithField("error", err).Error("Failed to parse request url or token header value.")
 		w.WriteHeader(http.StatusUnauthorized)
 		return
