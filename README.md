@@ -57,7 +57,7 @@ and `app_config.pkl` must be present in same directory as application executable
 Authentication endpoint. Return code `200 OK` given successful authentication, else `401 Unauthorized`.
 
 #### Example nginx
-The following configuration is an example how to use `auth` through `nginx`. This example applicable for GKE.
+The following configuration, within GKE, is an example how to use `auth` through `nginx` to enable global authentication.
 
 :exclamation: Use `NetworkPolicy` for `Open IAP` to restrict connectivity to `/auth`.
 
