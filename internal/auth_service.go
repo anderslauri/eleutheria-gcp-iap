@@ -145,7 +145,7 @@ func (l *listener) auth(w http.ResponseWriter, r *http.Request) {
 	defer putGoogleTokenClaims(claims)
 	// Verify token validity, signature and audience.
 	if err = l.token.Verify(ctx, tokenString, aud, claims); err != nil {
-		log.WithField("error", err).Debug("Failed generating or verifying token.")
+		log.WithField("error", err).Error("Failed generating or verifying token.")
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
