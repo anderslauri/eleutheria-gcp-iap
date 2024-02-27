@@ -111,13 +111,13 @@ func (l *listener) healthz(w http.ResponseWriter, r *http.Request) {
 func (l *listener) auth(w http.ResponseWriter, r *http.Request) {
 	// Extract bearer token.
 	tokenString, _ := request.HeaderExtractor{
-		"X-Forwarded-Proxy-Authorization",
-		"X-Forwarded-Authorization"}.ExtractToken(r)
+		"X-Proxy-Authorization",
+		"X-Authorization"}.ExtractToken(r)
 	// Extract request url.
 	requestURL, err := url.Parse(r.Header.Get(l.xOriginalHeader))
 	if err != nil || (len(tokenString) < 7 || !strings.EqualFold(tokenString[:7], "bearer:")) {
-		log.WithField("error", err).Debug("Failed to parse request url or token header value.")
-		w.WriteHeader(http.StatusProxyAuthRequired)
+		log.WithField("error", err).Error("Failed to parse request url or token header value.")
+		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
 	// Re-slice string that we remove Bearer: prefix - also remove an optional blank space if present.
@@ -148,7 +148,7 @@ func (l *listener) auth(w http.ResponseWriter, r *http.Request) {
 	// Verify token validity, signature and audience.
 	if err = l.token.Verify(ctx, tokenString, aud, claims); err != nil {
 		log.WithField("error", err).Debug("Failed generating or verifying token.")
-		w.WriteHeader(http.StatusProxyAuthRequired)
+		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
 	email = UserID(claims.Email)
@@ -163,7 +163,7 @@ verifyGoogleCloudPolicyBindings:
 	bindings, err := l.policyClient.IdentityAwareProxyPolicyBindingForUser(email)
 	if err != nil {
 		log.WithField("error", err).Warningf("No policy role binding found for user %s.", email)
-		w.WriteHeader(http.StatusProxyAuthRequired)
+		w.WriteHeader(http.StatusUnauthorized)
 		return
 	} else if len(bindings) == 1 && len(bindings[0].Expression) == 0 {
 		// We have a single role binding without a conditional expression. User is authenticated.
@@ -181,7 +181,7 @@ verifyGoogleCloudPolicyBindings:
 		if !isAuthorized || err != nil {
 			log.WithField("error", err).Warningf("Conditional expression with title %s is not valid for user %s.",
 				bindings[0].Title, email)
-			w.WriteHeader(http.StatusProxyAuthRequired)
+			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
 		return
@@ -194,7 +194,7 @@ verifyGoogleCloudPolicyBindings:
 		} else if ok, err := doesConditionalExpressionEvaluateToTrue(binding.Expression, params); !ok || err != nil {
 			log.WithField("error", err).Warningf("Conditional expression with title %s is not valid for user %s.",
 				binding.Title, email)
-			w.WriteHeader(http.StatusProxyAuthRequired)
+			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
 	}
