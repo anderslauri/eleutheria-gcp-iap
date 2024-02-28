@@ -2,6 +2,7 @@ package internal
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/MicahParks/keyfunc/v3"
@@ -15,9 +16,9 @@ import (
 )
 
 const (
-	publicGoogleCerts       = "https://www.googleapis.com/oauth2/v3/certs"
-	selfSignedCertsPrefix   = "https://www.googleapis.com/service_accounts/v1/jwk/"
-	publicGoogleCertsIssuer = "https://accounts.google.com"
+	googleConfigurationOpenID = "https://accounts.google.com/.well-known/openid-configuration"
+	googleServiceAccountJwk   = "https://www.googleapis.com/service_accounts/v1/jwk/"
+	googlePublicIssuerIdToken = "https://accounts.google.com"
 )
 
 // GoogleTokenService is a backend representation to manage authn/authz of Google Tokens.
@@ -52,8 +53,7 @@ func NewGoogleTokenService(ctx context.Context, jwkCache cache.Cache[string, cac
 		jwkCache: jwkCache,
 	}
 	// Load initial public certificates before starting.
-	err := googleTokenService.googleCertsRefresher(ctx, refreshCertsInterval)
-	if err != nil {
+	if err := googleTokenService.googleCertsRefresher(ctx, refreshCertsInterval); err != nil {
 		return nil, err
 	}
 	return googleTokenService, nil
@@ -61,20 +61,49 @@ func NewGoogleTokenService(ctx context.Context, jwkCache cache.Cache[string, cac
 
 // readGoogleCerts is used when requesting JWK from Google Cloud.
 func (t *GoogleTokenService) readGoogleCerts(ctx context.Context, url string, writer io.Writer) error {
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	jwkReq, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return err
 	}
-	rsp, err := t.jwkClient.Do(req)
+	rsp, err := t.jwkClient.Do(jwkReq)
 	if err != nil {
 		return err
 	}
 	defer rsp.Body.Close()
-
-	if _, err = io.Copy(writer, rsp.Body); err != nil {
-		return err
+	// Self-signed Google Service Account JWK. For public endpoint,
+	// we need to first identify url - value part of key "jwks_uri".
+	if url != googleConfigurationOpenID {
+		if _, err = io.Copy(writer, rsp.Body); err != nil {
+			return err
+		}
+		return nil
 	}
-	return nil
+	buf := getBuffer()
+	defer putBuffer(buf)
+
+	oidConfig := make(map[string]any)
+	if _, err = io.Copy(buf, rsp.Body); err != nil {
+		return err
+	} else if err = json.Unmarshal(buf.Bytes(), &oidConfig); err != nil {
+		return fmt.Errorf("%w: unmarshal json response into map failed", err)
+	} else if val, ok := oidConfig["jwks_uri"]; !ok {
+		return fmt.Errorf("%w: jwks_uri in openid discovery not found", ErrMissingJWK)
+	} else if reqUrl, ok := val.(string); !ok {
+		return fmt.Errorf("%w: jwks_uri in openid discovery is not of type string", ErrMissingJWK)
+	} else {
+		jwkReq, _ = http.NewRequestWithContext(ctx, "GET", reqUrl, nil)
+
+		jwkRsp, err := t.jwkClient.Do(jwkReq)
+		if err != nil {
+			return ErrMissingJWK
+		}
+		defer jwkRsp.Body.Close()
+
+		if _, err = io.Copy(writer, jwkRsp.Body); err == nil {
+			return nil
+		}
+	}
+	return ErrMissingJWK
 }
 
 // googleCertsRefresher starts a background routine to fetch JWK every 10 minutes,
@@ -84,7 +113,7 @@ func (t *GoogleTokenService) googleCertsRefresher(ctx context.Context, interval 
 	buffer := getBuffer()
 	defer putBuffer(buffer)
 
-	if err := t.readGoogleCerts(ctx, publicGoogleCerts, buffer); err != nil {
+	if err := t.readGoogleCerts(ctx, googleConfigurationOpenID, buffer); err != nil {
 		return err
 	}
 
@@ -106,7 +135,7 @@ func (t *GoogleTokenService) googleCertsRefresher(ctx context.Context, interval 
 				return
 			case <-ticker.C:
 				buffer = getBuffer()
-				if err := t.readGoogleCerts(ctx, publicGoogleCerts, buffer); err == nil {
+				if err := t.readGoogleCerts(ctx, googleConfigurationOpenID, buffer); err == nil {
 					if keySet, err := keyfunc.NewJWKSetJSON(buffer.Bytes()); err == nil {
 						t.publicKey.Store(&keySet)
 					}
@@ -120,7 +149,7 @@ func (t *GoogleTokenService) googleCertsRefresher(ctx context.Context, interval 
 
 // keyFunc retrieves JWK from Google API or local cache. Mostly cache.
 func (t *GoogleTokenService) keyFunc(ctx context.Context, issuer string) (keyfunc.Keyfunc, error) {
-	if issuer == publicGoogleCertsIssuer {
+	if issuer == googlePublicIssuerIdToken {
 		return *t.publicKey.Load(), nil
 	}
 	buf := getBuffer()
@@ -130,7 +159,7 @@ func (t *GoogleTokenService) keyFunc(ctx context.Context, issuer string) (keyfun
 	keySet, ok := t.jwkCache.Get(issuer)
 	if ok {
 		return keySet.Val, nil
-	} else if err := t.readGoogleCerts(ctx, fmt.Sprintf("%s%s", selfSignedCertsPrefix, issuer), buf); err != nil {
+	} else if err := t.readGoogleCerts(ctx, fmt.Sprintf("%s%s", googleServiceAccountJwk, issuer), buf); err != nil {
 		return nil, ErrMissingJWK
 	} else if keySet.Val, err = keyfunc.NewJWKSetJSON(buf.Bytes()); err != nil {
 		return nil, ErrMissingJWK
@@ -146,23 +175,41 @@ func (t *GoogleTokenService) keyFunc(ctx context.Context, issuer string) (keyfun
 // Verify transform base64 encoded token string into a Token representation while verifying claims and audience.
 func (t *GoogleTokenService) Verify(ctx context.Context, tokenString, aud string, tokenClaims *GoogleTokenClaims) error {
 	// FIXME: This is a first pass merely to identify issuer. Optimize away.
-	token, _, err := new(jwt.Parser).ParseUnverified(tokenString, jwt.MapClaims{})
+	token, _, err := new(jwt.Parser).ParseUnverified(tokenString, tokenClaims)
 	if err != nil {
 		return err
 	}
 	issuer, _ := token.Claims.GetIssuer()
-
+	if len(issuer) == 0 {
+		return fmt.Errorf("%w: issuer claim missing", ErrUnknownTokenType)
+	}
+	// Retrieve jwk keys to verify integrity.
 	keySet, err := t.keyFunc(ctx, issuer)
+	if err != nil {
+		return fmt.Errorf("%w: found not issuer to verify integrity of token", err)
+	}
+	token, err = jwt.ParseWithClaims(tokenString, tokenClaims, keySet.Keyfunc,
+		jwt.WithLeeway(1*time.Minute), jwt.WithAudience(aud),
+		jwt.WithExpirationRequired(), jwt.WithIssuedAt())
 	if err != nil {
 		return err
 	}
-
-	token, err = jwt.ParseWithClaims(tokenString, tokenClaims,
-		keySet.Keyfunc, jwt.WithLeeway(10*time.Second), jwt.WithAudience(aud))
-	if err != nil {
-		return err
-	} else if googleToken, ok := token.Claims.(*GoogleTokenClaims); !ok || !token.Valid || len(googleToken.Email) == 0 {
+	googleToken, ok := token.Claims.(*GoogleTokenClaims)
+	switch {
+	case !ok || !token.Valid:
 		return ErrUnknownTokenType
+		// Most common scenario.
+	case len(googleToken.Email) > 0 && issuer == googlePublicIssuerIdToken:
+		return nil
+		// Ensure this is not a public issuer. Claim email must be present.
+	case len(googleToken.Email) == 0 && issuer == googlePublicIssuerIdToken:
+		return fmt.Errorf("%w: missing email claim", ErrUnknownTokenType)
+		// Self-signed JWT. Claim issuer must be equal to subject claim.
+	case issuer != googleToken.Subject:
+		return fmt.Errorf("%w: token not equal subject", ErrUnknownTokenType)
+		// https://cloud.google.com/iam/docs/create-short-lived-credentials-direct#create-jwt
+	case googleToken.ExpiresAt.After(time.Now().Add(12 * time.Hour)):
+		return fmt.Errorf("%w: exp must be less than 12 hours", ErrUnknownTokenType)
 	}
 	return nil
 }

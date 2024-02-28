@@ -8,6 +8,7 @@ typealias Host = String(!isEmpty)
 typealias LogLevel = "INFO"|"WARNING"|"DEBUG"|"ERROR"|"TRACE"
 typealias Header = String(!isEmpty)
 typealias Interval = Duration(this > 60.s)
+typealias Leeway = Duration(this < 10.min)
 
 host: Host = "0.0.0.0"
 port: Port = 8080

@@ -11,6 +11,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/oauth2/google"
 	admin "google.golang.org/api/admin/directory/v1"
+	"google.golang.org/api/iamcredentials/v1"
 	"net"
 	"net/http"
 	"net/url"
@@ -43,8 +44,7 @@ func NewListener(ctx context.Context, host, xHeaderUri string, port uint16,
 
 	credentials, err := google.FindDefaultCredentials(ctx,
 		admin.AdminDirectoryGroupReadonlyScope,
-		// TODO: What const is this?
-		"https://www.googleapis.com/auth/cloud-platform.read-only",
+		iamcredentials.CloudPlatformScope,
 	)
 	if err != nil {
 		return nil, err

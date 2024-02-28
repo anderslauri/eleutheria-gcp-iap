@@ -12,6 +12,7 @@ logger {
   logLevel = "INFO"
   reportCaller = false
 }
+
 headerMapping {
   url = "X-Original-Url"
 }
