@@ -106,8 +106,7 @@ global-auth-url: http://<service name>.<namespace>:8080/auth
 Kubernetes health endpoint for liveness and readiness. Return code `200 OK`.
 
 ## Technical Debt
-1. Decouple `listener` and `auth`. Must be done for proxy mode.
-2. Use `HTTP-connect`.
+1. Decouple `listener` and `auth`. Must be done for proxy mode and to support `HTTP CONNECT` for TCP-tunnels.
 3. Role bindings on project level are only used. Folders and organization not implemented.
 4. Implement support for `MemoryStore`.
 5. Consume `IAM Audit Events`, ensuring close to real time changes to policy bindings for user.
