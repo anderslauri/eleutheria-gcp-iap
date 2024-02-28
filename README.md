@@ -57,12 +57,39 @@ for Google Service Account inside project. Usage of custom role is recommended!
 ### /auth (GET)
 Authentication endpoint. Return code `200 OK` given successful authentication, else `401 Unauthorized`.
 
-#### Example nginx
-The following configuration, within GKE, is an example how to use `auth` through `nginx` to enable global authentication.
+#### Zero Trust with NetworkPolicy and nginx
+Use the following example (as inspiration), to enable secure, zero trust based communication of workload to workload communication to services on `GKE`.
 
-:exclamation: Use `NetworkPolicy` for `Open IAP` to restrict connectivity to `/auth`.
+##### Configuration NetworkPolicy
+Enforce connectivity restrictions to service, traffic must only be permitted through `namespace` of `nginx`.
 
-##### Global configuration nginx
+````
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: my-service
+spec:
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchExpressions:
+              - key: kubernetes.io/metadata.name
+                operator: In
+                values:
+                - nginx
+      ports:
+      - port: 8080
+        protocol: TCP
+  podSelector:
+    matchLabels:
+      app: my-service
+  policyTypes:
+  - Ingress
+`````
+
+##### Global nginx configuration
+Define following configuration on `controller` of `nginx`. Ensuring, requests (all `ingresses` registered with `controller`), only are permitted given valid authentication.
+
 ```
 global-auth-snippet: |
   proxy_set_header Proxy-Authorization $http_proxy_authorization;
