@@ -88,7 +88,7 @@ spec:
 `````
 
 ##### Global nginx configuration
-Define following configuration on `controller` of `nginx`. Ensuring, requests (all `ingresses` registered with `controller`), only are permitted given valid authentication.
+Define following configuration on `controller` of `nginx`. Ensuring, requests (all `ingress` registered with `controller`), only are permitted given valid authentication.
 
 ```
 global-auth-snippet: |
