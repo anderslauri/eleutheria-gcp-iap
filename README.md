@@ -107,9 +107,10 @@ Kubernetes health endpoint for liveness and readiness. Return code `200 OK`.
 
 ## Technical Debt
 1. Decouple `listener` and `auth`. Must be done for proxy mode.
-2. Role bindings on project level are only used. Folders and organization not implemented.
-3. Implement support for `MemoryStore`.
-4. Consume `IAM Audit Events`, ensuring close to real time changes to policy bindings for user.
+2. Use `HTTP-connect`.
+3. Role bindings on project level are only used. Folders and organization not implemented.
+4. Implement support for `MemoryStore`.
+5. Consume `IAM Audit Events`, ensuring close to real time changes to policy bindings for user.
 
 [Google Workspace Groups API]: <https://developers.google.com/admin-sdk/directory/reference/rest/v1/groups> "Google Workspace Groups API"
 [Google Workspace Administrator Roles]: <https://support.google.com/a/answer/2405986> "Google Workspace Administrator Roles"
