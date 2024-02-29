@@ -24,6 +24,7 @@ const (
 // GoogleTokenService is a backend representation to manage authn/authz of Google Tokens.
 type GoogleTokenService struct {
 	jwkClient http.Client
+	leeway    time.Duration
 	jwkCache  cache.Cache[string, cache.ExpiryCacheValue[keyfunc.Keyfunc]]
 	// publicKey is issuer accounts.google.com, only self-signed in cache.
 	publicKey atomic.Pointer[keyfunc.Keyfunc]
@@ -48,9 +49,11 @@ var (
 )
 
 // NewGoogleTokenService creates a new token service for Google Tokens.
-func NewGoogleTokenService(ctx context.Context, jwkCache cache.Cache[string, cache.ExpiryCacheValue[keyfunc.Keyfunc]], refreshCertsInterval time.Duration) (*GoogleTokenService, error) {
+func NewGoogleTokenService(ctx context.Context,
+	jwkCache cache.Cache[string, cache.ExpiryCacheValue[keyfunc.Keyfunc]], refreshCertsInterval, leeway time.Duration) (*GoogleTokenService, error) {
 	googleTokenService := &GoogleTokenService{
 		jwkCache: jwkCache,
+		leeway:   leeway,
 	}
 	// Load initial public certificates before starting.
 	if err := googleTokenService.googleCertsRefresher(ctx, refreshCertsInterval); err != nil {
@@ -85,7 +88,7 @@ func (t *GoogleTokenService) readGoogleCerts(ctx context.Context, url string, wr
 	if _, err = io.Copy(buf, rsp.Body); err != nil {
 		return err
 	} else if err = json.Unmarshal(buf.Bytes(), &oidConfig); err != nil {
-		return fmt.Errorf("%w: unmarshal json response into map failed", err)
+		return fmt.Errorf("%w: open-id discovery document unmarshal json failed", err)
 	} else if val, ok := oidConfig["jwks_uri"]; !ok {
 		return fmt.Errorf("%w: jwks_uri in openid discovery not found", ErrMissingJWK)
 	} else if reqUrl, ok := val.(string); !ok {
@@ -174,7 +177,7 @@ func (t *GoogleTokenService) keyFunc(ctx context.Context, issuer string) (keyfun
 
 // Verify transform base64 encoded token string into a Token representation while verifying claims and audience.
 func (t *GoogleTokenService) Verify(ctx context.Context, tokenString, aud string, tokenClaims *GoogleTokenClaims) error {
-	// FIXME: This is a first pass merely to identify issuer. Optimize away.
+	// FIXME: Identify issuer. Required for JWK as part of keyFunc for second pass. Optimize away.
 	token, _, err := new(jwt.Parser).ParseUnverified(tokenString, tokenClaims)
 	if err != nil {
 		return err
@@ -186,30 +189,31 @@ func (t *GoogleTokenService) Verify(ctx context.Context, tokenString, aud string
 	// Retrieve jwk keys to verify integrity.
 	keySet, err := t.keyFunc(ctx, issuer)
 	if err != nil {
-		return fmt.Errorf("%w: found not issuer to verify integrity of token", err)
+		return fmt.Errorf("%w: found no jwk to verify integrity of token", err)
 	}
-	token, err = jwt.ParseWithClaims(tokenString, tokenClaims, keySet.Keyfunc,
-		jwt.WithLeeway(1*time.Minute), jwt.WithAudience(aud),
-		jwt.WithExpirationRequired(), jwt.WithIssuedAt())
+	token, err = jwt.ParseWithClaims(tokenString, tokenClaims, keySet.Keyfunc, jwt.WithLeeway(t.leeway),
+		jwt.WithAudience(aud), jwt.WithExpirationRequired(), jwt.WithIssuedAt())
 	if err != nil {
 		return err
 	}
+
 	googleToken, ok := token.Claims.(*GoogleTokenClaims)
 	switch {
 	case !ok || !token.Valid:
 		return ErrUnknownTokenType
-		// Most common scenario.
-	case len(googleToken.Email) > 0 && issuer == googlePublicIssuerIdToken:
-		return nil
-		// Ensure this is not a public issuer. Claim email must be present.
-	case len(googleToken.Email) == 0 && issuer == googlePublicIssuerIdToken:
-		return fmt.Errorf("%w: missing email claim", ErrUnknownTokenType)
-		// Self-signed JWT. Claim issuer must be equal to subject claim.
+	case issuer == googlePublicIssuerIdToken:
+		if len(googleToken.Email) > 0 {
+			return nil
+		}
+		return fmt.Errorf("%w: missing email claim in public id-token", ErrUnknownTokenType)
 	case issuer != googleToken.Subject:
-		return fmt.Errorf("%w: token not equal subject", ErrUnknownTokenType)
+		return fmt.Errorf("%w: token issuer not equal subject for self-signed token", ErrUnknownTokenType)
 		// https://cloud.google.com/iam/docs/create-short-lived-credentials-direct#create-jwt
-	case googleToken.ExpiresAt.After(time.Now().Add(12 * time.Hour)):
-		return fmt.Errorf("%w: exp must be less than 12 hours", ErrUnknownTokenType)
+		// The exp (expiration time) claim must be no more than 12 hours in the future
+	case (googleToken.ExpiresAt.Unix() - googleToken.IssuedAt.Unix()) > 43200:
+		return fmt.Errorf("%w: exp must be no more than 12 hours in the future from iat", ErrUnknownTokenType)
 	}
+	// Use Email as claim for upstream caller, as they don't care which type of token this is.
+	googleToken.Email = googleToken.Issuer
 	return nil
 }

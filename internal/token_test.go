@@ -70,7 +70,7 @@ func requestGoogleSelfSignedToken(ctx context.Context, aud string) (string, erro
 func newTokenService(ctx context.Context) (*internal.GoogleTokenService, error) {
 	defaultInterval := 5 * time.Minute
 	jwkCache := cache.NewExpiryCache[keyfunc.Keyfunc](ctx, defaultInterval)
-	tokenService, err := internal.NewGoogleTokenService(ctx, jwkCache, defaultInterval)
+	tokenService, err := internal.NewGoogleTokenService(ctx, jwkCache, defaultInterval, 1*time.Minute)
 	if err != nil {
 		return nil, err
 	}

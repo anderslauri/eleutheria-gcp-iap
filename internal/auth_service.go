@@ -40,7 +40,7 @@ type Listener interface {
 // NewListener creates a new HTTP-server. Listen(ctx...) must be invoked from calling routine to start listening.
 func NewListener(ctx context.Context, host, xHeaderUri string, port uint16,
 	refreshPublicCertsInterval, jwkCacheCleanInterval, jwtCacheCleanInterval,
-	policyBindingRefreshInterval time.Duration) (Listener, error) {
+	policyBindingRefreshInterval, leeway time.Duration) (Listener, error) {
 
 	credentials, err := google.FindDefaultCredentials(ctx,
 		admin.AdminDirectoryGroupReadonlyScope,
@@ -63,7 +63,7 @@ func NewListener(ctx context.Context, host, xHeaderUri string, port uint16,
 	log.Info("Starting client for Google Tokens.")
 
 	googleTokenService, err := NewGoogleTokenService(ctx,
-		cache.NewExpiryCache[keyfunc.Keyfunc](ctx, refreshPublicCertsInterval), jwkCacheCleanInterval)
+		cache.NewExpiryCache[keyfunc.Keyfunc](ctx, refreshPublicCertsInterval), jwkCacheCleanInterval, leeway)
 	if err != nil {
 		return nil, err
 	}
@@ -177,7 +177,7 @@ verifyGoogleCloudPolicyBindings:
 		log.Debugf("User %s has single conditional policy expression. Evaluating.", email)
 		isAuthorized, err := doesConditionalExpressionEvaluateToTrue(bindings[0].Expression, params)
 		if !isAuthorized || err != nil {
-			log.WithField("error", err).Warningf("Conditional expression with title %s is not valid for user %s.",
+			log.WithField("error", err).Errorf("Conditional expression with title %s is not valid for user %s.",
 				bindings[0].Title, email)
 			w.WriteHeader(http.StatusUnauthorized)
 			return
@@ -190,7 +190,7 @@ verifyGoogleCloudPolicyBindings:
 		if len(binding.Expression) == 0 {
 			continue
 		} else if ok, err := doesConditionalExpressionEvaluateToTrue(binding.Expression, params); !ok || err != nil {
-			log.WithField("error", err).Warningf("Conditional expression with title %s is not valid for user %s.",
+			log.WithField("error", err).Errorf("Conditional expression with title %s is not valid for user %s.",
 				binding.Title, email)
 			w.WriteHeader(http.StatusUnauthorized)
 			return

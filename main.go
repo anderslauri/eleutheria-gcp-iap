@@ -31,7 +31,8 @@ func main() {
 	// Really need to find a better solution for parameter passing.
 	listener, err := internal.NewListener(ctx, cfg.Host, cfg.HeaderMapping.Url,
 		cfg.Port, cfg.PublicGoogleCerts.RefreshInterval.GoDuration(), cfg.JwkCache.Cleaner.GoDuration(),
-		cfg.JwtCache.Cleaner.GoDuration(), cfg.GooglePolicyBindings.RefreshInterval.GoDuration())
+		cfg.JwtCache.Cleaner.GoDuration(), cfg.GooglePolicyBindings.RefreshInterval.GoDuration(),
+		cfg.Leeway.GoDuration())
 	if err != nil {
 		log.WithField("error", err).Fatalf("Not possible to start listener.")
 	}

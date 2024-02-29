@@ -21,7 +21,7 @@ func TestMain(m *testing.M) {
 func localServiceListener(ctx context.Context) (Listener, error) {
 	defaultInterval := 5 * time.Minute
 	listener, err := NewListener(ctx, "0.0.0.0", "X-Original-URL", 0,
-		defaultInterval, defaultInterval, defaultInterval, defaultInterval)
+		defaultInterval, defaultInterval, defaultInterval, defaultInterval, 1*time.Minute)
 	if err != nil {
 		return nil, err
 	}
@@ -64,6 +64,30 @@ func TestAuthWithValidIdentityToken(t *testing.T) {
 	defer listener.Close(ctx)
 
 	idToken, err := requestUserGoogleIdToken(ctx, "https://myurl.com")
+	if err != nil {
+		t.Fatalf("Unexpected error returned, error: %s.", err)
+	}
+	req, _ := http.NewRequestWithContext(ctx, "GET", requestUrl(listener.Port(), "auth"), nil)
+	req.Header.Set("Proxy-Authorization", fmt.Sprintf("Bearer: %s", idToken))
+	req.Header.Set("X-Original-URL", "https://myurl.com/hello")
+
+	if rsp, err := httpClient.Do(req); err != nil {
+		t.Fatalf("Unexpected error returned, error: %s.", err)
+	} else if rsp.StatusCode != http.StatusOK {
+		t.Fatalf("Expected status code 200 OK, status code %d was returned.", rsp.StatusCode)
+	}
+}
+
+func TestAuthWithSelfSignedToken(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	listener, err := localServiceListener(ctx)
+	if err != nil {
+		t.Fatalf("Unexpected error returned, error: %s.", err)
+	}
+	defer listener.Close(ctx)
+
+	idToken, err := requestGoogleSelfSignedToken(ctx, "https://myurl.com")
 	if err != nil {
 		t.Fatalf("Unexpected error returned, error: %s.", err)
 	}
