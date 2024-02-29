@@ -9,7 +9,8 @@ The following token types are supported for Google Service Account:
 - **ID-Token**
 - **Self-Signed JWTs**
 
-Please reference [Google Cloud Token Types][Google Cloud Token Types] for more information.
+Please reference [Google Cloud Token Types][Google Cloud Token Types] for more information. For **Self-Signed JWTs** please ensure to follow
+[specification as required by Google][Self-Signed JWTs].
 
 ## Why?
 - Identity Aware Proxy for Google Cloud is only available in BeyondCorp Enterprise.
@@ -120,3 +121,4 @@ This is what is in scope for `open-iap`.
 [JWT-verification]: <https://cloud.google.com/docs/authentication/token-types#id-aud> "JWT-verification"
 [cel-go]: <https://github.com/google/cel-go> "cel-go"
 [pkl-lang]: <https://pkl-lang.org/go/current/index.html> "pkl-lang"
+[Self-Signed JWTs]: <https://cloud.google.com/iam/docs/create-short-lived-credentials-direct#create-jwt> "Self-Signed JWTs"
