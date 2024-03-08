@@ -12,12 +12,12 @@ import (
 	"time"
 )
 
-// ProjectPolicyReaderService is a service implementation to retrieve bindings from Google Cloud.
-type ProjectPolicyReaderService struct {
-	service               *cloudresourcemanager.Service
-	pid                   string
-	roleCollectionCopy    atomic.Value
-	googleWorkspaceClient GoogleWorkspaceClientReader
+// IdentityAccessManagementClient is a service implementation to retrieve bindings from Google Cloud.
+type IdentityAccessManagementClient struct {
+	service            *cloudresourcemanager.Service
+	pid                string
+	roleCollectionCopy atomic.Value
+	gwsClient          GoogleWorkspaceClientReader
 }
 
 // PolicyBinding is a struct to retain policy information (of what is relevant).
@@ -43,19 +43,38 @@ type PolicyBindingCollection map[Role]PolicyBindings
 // UserRoleCollection is a collection of user id to bindings per role.
 type UserRoleCollection map[UserID]PolicyBindingCollection
 
-// PolicyBindingClientReader is an interface to abstract PolicyBindingService.
-type PolicyBindingClientReader interface {
-	LoadUsersWithRoleForIdentityAwareProxy(ctx context.Context) error
+// IdentityAccessManagementReader is an interface to abstract PolicyBindingService.
+type IdentityAccessManagementReader interface {
+	RefreshRoleAndBindingsForIdentityAwareProxy(ctx context.Context) error
 	IdentityAwareProxyPolicyBindingForUser(uid UserID) (PolicyBindings, error)
-	UserRoleCollection() UserRoleCollection
+	IdentityAwareProxyUserRoleCollection() UserRoleCollection
 }
 
 // ErrNoIdentityAwareProxyRoleForUser is returned when user does not have role for IAP.
 var ErrNoIdentityAwareProxyRoleForUser = errors.New("no iap role found")
 
+// NewIdentityAccessManagementClient generates an implementation of PolicyBindingReader.
+func NewIdentityAccessManagementClient(ctx context.Context, googleWorkspaceClient GoogleWorkspaceClientReader,
+	credentials *google.Credentials, refresh time.Duration) (*IdentityAccessManagementClient, error) {
+	service, err := cloudresourcemanager.NewService(ctx, option.WithCredentials(credentials))
+	if err != nil {
+		return nil, err
+	}
+	ps := &IdentityAccessManagementClient{
+		service:   service,
+		pid:       credentials.ProjectID,
+		gwsClient: googleWorkspaceClient,
+	}
+	if err = ps.RefreshRoleAndBindingsForIdentityAwareProxy(ctx); err != nil {
+		return nil, err
+	}
+	go ps.refreshProjectPolicyBindings(ctx, refresh)
+	return ps, nil
+}
+
 // IdentityAwareProxyPolicyBindingForUser look up which bindings (roles and expressions) a user have.
-func (p *ProjectPolicyReaderService) IdentityAwareProxyPolicyBindingForUser(uid UserID) (PolicyBindings, error) {
-	collection, ok := p.roleCollectionCopy.Load().(UserRoleCollection)
+func (i *IdentityAccessManagementClient) IdentityAwareProxyPolicyBindingForUser(uid UserID) (PolicyBindings, error) {
+	collection, ok := i.roleCollectionCopy.Load().(UserRoleCollection)
 	val, ok := collection[uid]
 	if !ok {
 		return nil, ErrNoIdentityAwareProxyRoleForUser
@@ -63,32 +82,13 @@ func (p *ProjectPolicyReaderService) IdentityAwareProxyPolicyBindingForUser(uid 
 	return val[iapRole], nil
 }
 
-// NewPolicyBindingClient generates an implementation of PolicyBindingReader.
-func NewPolicyBindingClient(ctx context.Context, googleWorkspaceClient GoogleWorkspaceClientReader,
-	credentials *google.Credentials, refresh time.Duration) (*ProjectPolicyReaderService, error) {
-	service, err := cloudresourcemanager.NewService(ctx, option.WithCredentials(credentials))
-	if err != nil {
-		return nil, err
-	}
-	ps := &ProjectPolicyReaderService{
-		service:               service,
-		pid:                   credentials.ProjectID,
-		googleWorkspaceClient: googleWorkspaceClient,
-	}
-	if err = ps.LoadUsersWithRoleForIdentityAwareProxy(ctx); err != nil {
-		return nil, err
-	}
-	go ps.refreshProjectPolicyBindings(ctx, refresh)
-	return ps, nil
-}
-
-// UserRoleCollection retrieve entire collection of policy bindings per user.
-func (p *ProjectPolicyReaderService) UserRoleCollection() UserRoleCollection {
-	val := p.roleCollectionCopy.Load()
+// IdentityAwareProxyUserRoleCollection retrieve entire collection of policy bindings per user.
+func (i *IdentityAccessManagementClient) IdentityAwareProxyUserRoleCollection() UserRoleCollection {
+	val := i.roleCollectionCopy.Load()
 	return val.(UserRoleCollection)
 }
 
-func (p *ProjectPolicyReaderService) refreshProjectPolicyBindings(ctx context.Context, interval time.Duration) {
+func (i *IdentityAccessManagementClient) refreshProjectPolicyBindings(ctx context.Context, interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
@@ -97,16 +97,16 @@ func (p *ProjectPolicyReaderService) refreshProjectPolicyBindings(ctx context.Co
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if err := p.LoadUsersWithRoleForIdentityAwareProxy(ctx); err != nil {
+			if err := i.RefreshRoleAndBindingsForIdentityAwareProxy(ctx); err != nil {
 				log.WithField("error", err).Error("Could not refresh project policy bindings.")
 			}
 		}
 	}
 }
 
-// LoadUsersWithRoleForIdentityAwareProxy load UserRoleCollection into local memory for usage.
-func (p *ProjectPolicyReaderService) LoadUsersWithRoleForIdentityAwareProxy(ctx context.Context) error {
-	policies, err := p.service.Projects.GetIamPolicy(p.pid,
+// RefreshRoleAndBindingsForIdentityAwareProxy load UserRoleCollection into local memory for usage.
+func (i *IdentityAccessManagementClient) RefreshRoleAndBindingsForIdentityAwareProxy(ctx context.Context) error {
+	policies, err := i.service.Projects.GetIamPolicy(i.pid,
 		&cloudresourcemanager.GetIamPolicyRequest{
 			Options: &cloudresourcemanager.GetPolicyOptions{
 				RequestedPolicyVersion: 3,
@@ -136,7 +136,7 @@ func (p *ProjectPolicyReaderService) LoadUsersWithRoleForIdentityAwareProxy(ctx 
 			)
 			// Reference to Group in Google Workspace. Expand group to include members.
 			if strings.HasPrefix(user, "group:") {
-				membersInGroup, err := p.googleWorkspaceClient.MembersInGroup(ctx, string(uid))
+				membersInGroup, err := i.gwsClient.MembersInGroup(ctx, string(uid))
 				if err != nil {
 					log.WithField("error", err).Error("Can't retrieve members from group in Google workspace.")
 					continue
@@ -174,6 +174,6 @@ func (p *ProjectPolicyReaderService) LoadUsersWithRoleForIdentityAwareProxy(ctx 
 				})
 		}
 	}
-	p.roleCollectionCopy.Store(userRoleCollection)
+	i.roleCollectionCopy.Store(userRoleCollection)
 	return nil
 }

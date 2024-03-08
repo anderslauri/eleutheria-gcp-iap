@@ -3,7 +3,9 @@ package internal_test
 import (
 	"context"
 	"fmt"
+	"github.com/MicahParks/keyfunc/v3"
 	. "github.com/anderslauri/open-iap/internal"
+	"github.com/anderslauri/open-iap/internal/cache"
 	log "github.com/sirupsen/logrus"
 	"net/http"
 	"os"
@@ -17,15 +19,48 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-// localServiceListener generates a new listener per dynamic port.
-func localServiceListener(ctx context.Context) (Listener, error) {
-	defaultInterval := 5 * time.Minute
-	listener, err := NewListener(ctx, "0.0.0.0", "X-Original-URL", 0,
-		defaultInterval, defaultInterval, defaultInterval, defaultInterval, 1*time.Minute)
+// newAuthServiceListener generates a new auth service listener with dynamic port.
+func newAuthServiceListener(ctx context.Context) (*AuthServiceListener, error) {
+	credentials, err := googleCredentials()
+	if err != nil {
+		log.WithField("error", err).Fatal("Couldn't create Google IAM-credentials.")
+		return nil, err
+	}
+	log.Info("Creating Google Workspace client.")
+	gwsClient, err := NewGoogleWorkspaceClient(ctx, credentials)
+	if err != nil {
+		log.WithField("error", err).Fatal("Couldn't create Google Workspace client.")
+		return nil, err
+	}
+	iamClient, err := NewIdentityAccessManagementClient(ctx, gwsClient, credentials, 5*time.Minute)
+	if err != nil {
+		log.WithField("error", err).Fatal("Couldn't create Google Cloud IAM-policy client.")
+		return nil, err
+	}
+	log.Info("Creating Google Cloud token service.")
+	tokenService, err := NewGoogleTokenService(ctx,
+		cache.NewExpiryCache[keyfunc.Keyfunc](ctx, 1*time.Minute),
+		1*time.Minute, 1*time.Minute)
+	if err != nil {
+		log.WithField("error", err).Fatal("Couldn't create Google Cloud token service.")
+		return nil, err
+	}
+	log.Info("Creating Google Cloud authenticator service.")
+	authenticator, err := NewGoogleCloudTokenAuthenticator(tokenService,
+		cache.NewExpiryCache[UserID](ctx, 1*time.Minute), iamClient, gwsClient)
+	if err != nil {
+		log.WithField("error", err).Fatal("Couldn't create Google Cloud authenticator service.")
+		return nil, err
+	}
+	listener, err := NewAuthServiceListener(ctx, "0.0.0.0", "X-Original-URL", 0, authenticator)
 	if err != nil {
 		return nil, err
 	}
 	go listener.Open(ctx)
+	// Wait until port is registered.
+	for listener.Port() == 0 {
+		time.Sleep(10 * time.Millisecond)
+	}
 	return listener, nil
 }
 
@@ -39,7 +74,7 @@ var httpClient = &http.Client{}
 func TestHealthEndpoint(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	listener, err := localServiceListener(ctx)
+	listener, err := newAuthServiceListener(ctx)
 	if err != nil {
 		t.Fatalf("Unexpected error returned, error: %s.", err)
 	}
@@ -57,7 +92,7 @@ func TestHealthEndpoint(t *testing.T) {
 func TestAuthWithValidIdentityToken(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	listener, err := localServiceListener(ctx)
+	listener, err := newAuthServiceListener(ctx)
 	if err != nil {
 		t.Fatalf("Unexpected error returned, error: %s.", err)
 	}
@@ -68,7 +103,7 @@ func TestAuthWithValidIdentityToken(t *testing.T) {
 		t.Fatalf("Unexpected error returned, error: %s.", err)
 	}
 	req, _ := http.NewRequestWithContext(ctx, "GET", requestUrl(listener.Port(), "auth"), nil)
-	req.Header.Set("Proxy-Authorization", fmt.Sprintf("Bearer: %s", idToken))
+	req.Header.Set("Proxy-Authorization", fmt.Sprintf("Bearer %s", idToken))
 	req.Header.Set("X-Original-URL", "https://myurl.com/hello")
 
 	if rsp, err := httpClient.Do(req); err != nil {
@@ -81,7 +116,7 @@ func TestAuthWithValidIdentityToken(t *testing.T) {
 func TestAuthWithSelfSignedToken(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	listener, err := localServiceListener(ctx)
+	listener, err := newAuthServiceListener(ctx)
 	if err != nil {
 		t.Fatalf("Unexpected error returned, error: %s.", err)
 	}
@@ -92,7 +127,7 @@ func TestAuthWithSelfSignedToken(t *testing.T) {
 		t.Fatalf("Unexpected error returned, error: %s.", err)
 	}
 	req, _ := http.NewRequestWithContext(ctx, "GET", requestUrl(listener.Port(), "auth"), nil)
-	req.Header.Set("Proxy-Authorization", fmt.Sprintf("Bearer: %s", idToken))
+	req.Header.Set("Proxy-Authorization", fmt.Sprintf("Bearer %s", idToken))
 	req.Header.Set("X-Original-URL", "https://myurl.com/hello")
 
 	if rsp, err := httpClient.Do(req); err != nil {
@@ -105,7 +140,7 @@ func TestAuthWithSelfSignedToken(t *testing.T) {
 func BenchmarkAuthService(b *testing.B) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	listener, err := localServiceListener(ctx)
+	listener, err := newAuthServiceListener(ctx)
 	if err != nil {
 		b.Fatalf("Unexpected error returned, error: %s.", err)
 	}
