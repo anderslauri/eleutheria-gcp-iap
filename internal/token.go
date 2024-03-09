@@ -50,13 +50,13 @@ var (
 
 // NewGoogleTokenService creates a new token service for Google Tokens.
 func NewGoogleTokenService(ctx context.Context,
-	jwkCache cache.Cache[string, cache.ExpiryCacheValue[keyfunc.Keyfunc]], refreshCertsInterval, leeway time.Duration) (*GoogleTokenService, error) {
+	jwkCache cache.Cache[string, cache.ExpiryCacheValue[keyfunc.Keyfunc]], refreshPublicCertsInterval, leeway time.Duration) (*GoogleTokenService, error) {
 	googleTokenService := &GoogleTokenService{
 		jwkCache: jwkCache,
 		leeway:   leeway,
 	}
 	// Load initial public certificates before starting.
-	if err := googleTokenService.googleCertsRefresher(ctx, refreshCertsInterval); err != nil {
+	if err := googleTokenService.googleCertsRefresher(ctx, refreshPublicCertsInterval); err != nil {
 		return nil, err
 	}
 	return googleTokenService, nil

@@ -37,7 +37,7 @@ type Listener interface {
 	Shutdown(ctx context.Context) error
 	Port() int
 	ListenAndServe(ctx context.Context) error
-	ListenAndServeWithTLS(ctx context.Context, key, cert *string)
+	ListenAndServeWithTLS(ctx context.Context, key, cert []byte)
 }
 
 func newAuthServiceListener(_ context.Context, host, xForwardedUrlHeader string, port uint16, auth Authenticator) (*AuthServiceListener, error) {
@@ -75,7 +75,7 @@ func (a *AuthServiceListener) ListenAndServe(_ context.Context) error {
 	port := a.port.Load()
 
 	if l, err := net.Listen("tcp", fmt.Sprintf("%s:%d", a.host, port)); err != nil {
-		log.WithField("error", err).Fatal("TCP-listener could not be started.")
+		return err
 	} else {
 		a.listener = l
 		a.port.Store(uint32(l.Addr().(*net.TCPAddr).Port))
@@ -83,17 +83,27 @@ func (a *AuthServiceListener) ListenAndServe(_ context.Context) error {
 	return a.httpServer.Serve(a.listener)
 }
 
-func (a *AuthServiceListener) ListenAndServeWithTLS(_ context.Context, certFile, keyFile string) error {
+func (a *AuthServiceListener) ListenAndServeWithTLS(_ context.Context, key, cert []byte) error {
 	port := a.port.Load()
 
 	if l, err := net.Listen("tcp", fmt.Sprintf("%s:%d", a.host, port)); err != nil {
-		log.WithField("error", err).Fatal("TCP-listener could not be started.")
+		return err
 	} else {
 		a.listener = l
 		a.port.Store(uint32(l.Addr().(*net.TCPAddr).Port))
 	}
-	a.httpServer.TLSConfig.MinVersion = tls.VersionTLS13
-	return a.httpServer.ServeTLS(a.listener, certFile, keyFile)
+	certificate, err := tls.X509KeyPair(cert, key)
+	if err != nil {
+		return err
+	}
+	config := &tls.Config{
+		MinVersion: tls.VersionTLS13,
+	}
+	config.NextProtos = append(config.NextProtos, "http/1.1")
+	config.Certificates = make([]tls.Certificate, 1)
+	config.Certificates[0] = certificate
+	listener := tls.NewListener(a.listener, config)
+	return a.httpServer.Serve(listener)
 }
 
 // Close listener. Blocking.

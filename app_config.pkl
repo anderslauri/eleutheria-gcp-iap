@@ -17,10 +17,10 @@ headerMapping {
   url = "X-Original-Url"
 }
 
-publicGoogleCerts {
+googleCerts {
   refreshInterval = 10.min
 }
 
-googlePolicyBindings {
+iamPolicy {
   refreshInterval = 5.min
 }

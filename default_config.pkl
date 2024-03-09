@@ -3,25 +3,23 @@ module ApplicationConfig
 
 import "package://pkg.pkl-lang.org/pkl-go/pkl.golang@0.5.3#/go.pkl"
 
-typealias Port = UInt16(this > 0)
-typealias Host = String(!isEmpty)
 typealias LogLevel = "INFO"|"WARNING"|"DEBUG"|"ERROR"|"TRACE"
 typealias Header = String(!isEmpty)
 typealias Interval = Duration(this > 60.s)
-typealias Leeway = Duration(this < 10.min)
 
-host: Host = "0.0.0.0"
-port: Port = 8080
-leeway: Leeway = 1.min
+Host: String(!isEmpty) = "0.0.0.0"
+Port: UInt16(this > 0) = 8080
+Leeway: Duration(this < 10.min) = 1.min
 
 jwkCache: Cache
 jwtCache: Cache
-publicGoogleCerts: GoogleCerts
+googleCerts: GoogleCerts
 headerMapping: HeaderMapping
-googlePolicyBindings: PolicyBinding
+iamPolicy: IamPolicy
 logger: Logger
+tls: TLS
 
-class PolicyBinding {
+class IamPolicy {
   refreshInterval: Interval
 }
 
@@ -40,4 +38,9 @@ class HeaderMapping {
 class Logger {
   logLevel: LogLevel
   reportCaller: Boolean
+}
+
+class TLS {
+ keyFile: String
+ certFile: String
 }

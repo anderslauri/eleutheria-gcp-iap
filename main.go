@@ -47,14 +47,15 @@ func main() {
 	}
 	log.Info("Creating Identity Access Management client.")
 	iamClient, err := internal.NewIdentityAccessManagementClient(ctx, gwsClient,
-		credentials, cfg.GooglePolicyBindings.RefreshInterval.GoDuration())
+		credentials, cfg.IamPolicy.RefreshInterval.GoDuration())
 	if err != nil {
 		log.WithField("error", err).Fatal("Couldn't create Google Cloud IAM-policy client.")
 	}
 	log.Info("Creating Google Cloud token service.")
-	tokenService, err := internal.NewGoogleTokenService(ctx,
-		cache.NewExpiryCache[keyfunc.Keyfunc](ctx, cfg.PublicGoogleCerts.RefreshInterval.GoDuration()),
-		cfg.PublicGoogleCerts.RefreshInterval.GoDuration(), cfg.Leeway.GoDuration())
+
+	jwkCache := cache.NewExpiryCache[keyfunc.Keyfunc](ctx, cfg.JwkCache.Cleaner.GoDuration())
+	tokenService, err := internal.NewGoogleTokenService(ctx, jwkCache,
+		cfg.GoogleCerts.RefreshInterval.GoDuration(), cfg.Leeway.GoDuration())
 	if err != nil {
 		log.WithField("error", err).Fatal("Couldn't create Google Cloud token service.")
 	}
@@ -69,11 +70,29 @@ func main() {
 	if err != nil {
 		log.WithField("error", err).Fatalf("Not possible to start listener.")
 	}
-	go func() {
-		if err = authService.ListenAndServe(ctx); err != nil && !errors.Is(http.ErrServerClosed, err) {
-			log.WithField("error", err).Fatal("Failed to start listener.")
+
+	if cfg.Tls != nil && len(cfg.Tls.CertFile) > 0 && len(cfg.Tls.KeyFile) > 0 {
+		log.Info("Starting TLS-listener.")
+		pKey, err := os.ReadFile(cfg.Tls.KeyFile)
+		if err != nil {
+			log.WithField("error", err).Fatalf("Not possible to read private key file.")
 		}
-	}()
+		cert, err := os.ReadFile(cfg.Tls.CertFile)
+		if err != nil {
+			log.WithField("error", err).Fatalf("Not possible to read certificate key file.")
+		}
+		go func() {
+			if err = authService.ListenAndServeWithTLS(ctx, pKey, cert); err != nil && !errors.Is(http.ErrServerClosed, err) {
+				log.WithField("error", err).Fatal("Failed to start TLS-listener.")
+			}
+		}()
+	} else {
+		go func() {
+			if err = authService.ListenAndServe(ctx); err != nil && !errors.Is(http.ErrServerClosed, err) {
+				log.WithField("error", err).Fatal("Failed to start listener.")
+			}
+		}()
+	}
 	defer func() {
 		log.Info("Exiting application.")
 		_ = authService.Close(ctx)

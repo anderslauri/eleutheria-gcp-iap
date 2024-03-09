@@ -15,8 +15,8 @@ import (
 	"time"
 )
 
-// requestUserGoogleIdToken calls Google API for user (via ADC) and retrieves an ID-token.
-func requestUserGoogleIdToken(ctx context.Context, aud string) (string, error) {
+// requestGoogleServiceAccountIdToken calls Google API for user (via ADC) and retrieves an ID-token.
+func requestGoogleServiceAccountIdToken(ctx context.Context, aud string) (string, error) {
 	credentials, err := google.FindDefaultCredentials(ctx)
 	if err != nil {
 		return "", err
@@ -32,8 +32,8 @@ func requestUserGoogleIdToken(ctx context.Context, aud string) (string, error) {
 	return serviceAccountIdToken.AccessToken, nil
 }
 
-// requestGoogleSelfSignedToken creates a self-signed JWT.
-func requestGoogleSelfSignedToken(ctx context.Context, aud string) (string, error) {
+// requestGoogleServiceAccountSelfSignedIdToken creates a self-signed JWT.
+func requestGoogleServiceAccountSelfSignedIdToken(ctx context.Context, aud string) (string, error) {
 	credentials, err := google.FindDefaultCredentialsWithParams(ctx,
 		google.CredentialsParams{
 			Scopes: []string{"https://www.googleapis.com/auth/cloud-platform"},
@@ -83,7 +83,7 @@ func TestGoogleServiceAccountIdTokenVerification(t *testing.T) {
 
 	aud := "https://myurl.com"
 	tokenService, _ := newTokenService(ctx)
-	idToken, _ := requestUserGoogleIdToken(ctx, aud)
+	idToken, _ := requestGoogleServiceAccountIdToken(ctx, aud)
 	token := &internal.GoogleTokenClaims{}
 
 	if err := tokenService.Verify(ctx, idToken, aud, token); err != nil {
@@ -97,7 +97,7 @@ func TestGoogleSelfSignedTokenVerification(t *testing.T) {
 
 	aud := "https://myurl.com"
 	tokenService, _ := newTokenService(ctx)
-	selfSigned, err := requestGoogleSelfSignedToken(ctx, aud)
+	selfSigned, err := requestGoogleServiceAccountSelfSignedIdToken(ctx, aud)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +115,7 @@ func BenchmarkNewGoogleTokenService(b *testing.B) {
 	aud := "https://myurl.com"
 	token := &internal.GoogleTokenClaims{}
 	tokenService, _ := newTokenService(ctx)
-	idToken, _ := requestUserGoogleIdToken(ctx, aud)
+	idToken, _ := requestGoogleServiceAccountIdToken(ctx, aud)
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
