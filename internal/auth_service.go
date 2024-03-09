@@ -40,7 +40,7 @@ type Listener interface {
 	ListenAndServeWithTLS(ctx context.Context, key, cert *string)
 }
 
-func newAuthServiceListener(_ context.Context, host, xForwardedUrlHeader, tlsKey, tlsCert string, port uint16, auth Authenticator) (*AuthServiceListener, error) {
+func newAuthServiceListener(_ context.Context, host, xForwardedUrlHeader string, port uint16, auth Authenticator) (*AuthServiceListener, error) {
 	a := &AuthServiceListener{
 		serviceListener: serviceListener{
 			httpServer:    &http.Server{},
