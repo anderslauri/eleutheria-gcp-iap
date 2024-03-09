@@ -56,7 +56,7 @@ func newAuthServiceListener(ctx context.Context) (*AuthServiceListener, error) {
 	if err != nil {
 		return nil, err
 	}
-	go listener.Open(ctx)
+	go listener.ListenAndServe(ctx)
 	// Wait until port is registered.
 	for listener.Port() == 0 {
 		time.Sleep(10 * time.Millisecond)

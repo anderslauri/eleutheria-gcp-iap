@@ -70,7 +70,7 @@ func main() {
 		log.WithField("error", err).Fatalf("Not possible to start listener.")
 	}
 	go func() {
-		if err = authService.Open(ctx); err != nil && !errors.Is(http.ErrServerClosed, err) {
+		if err = authService.ListenAndServe(ctx); err != nil && !errors.Is(http.ErrServerClosed, err) {
 			log.WithField("error", err).Fatal("Failed to start listener.")
 		}
 	}()
