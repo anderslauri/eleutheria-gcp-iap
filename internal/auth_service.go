@@ -62,7 +62,7 @@ func newAuthServiceListener(_ context.Context, host, xForwardedUrlHeader string,
 
 // NewAuthServiceListener creates a new HTTP-server for /auth-endpoint. Open(ctx context.Context) must be invoked to listen.
 func NewAuthServiceListener(ctx context.Context, host, xForwardedUrlHeader string, port uint16, auth Authenticator) (*AuthServiceListener, error) {
-	return newAuthServiceListener(ctx, host, xForwardedUrlHeader, "", "", port, auth)
+	return newAuthServiceListener(ctx, host, xForwardedUrlHeader, port, auth)
 }
 
 // Port returns port of running listener.
