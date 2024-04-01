@@ -39,12 +39,14 @@ func (g *GoogleWorkspaceClient) traverseGroups(ctx context.Context, email string
 	}
 
 	for _, member := range response.Members {
-		if ok := doTraverse && seenGroupEmails.hasEmail(email); ok {
+		if ok := doTraverse && seenGroupEmails.hasEmail(member.Email); ok {
+			log.Debugf("%s email already seen, skipping.", member.Email)
 			continue
-		} else if ok = doTraverse && emailOfAllGroups.hasEmail(email); ok {
-			seenGroupEmails[email] = struct{}{}
+		} else if ok = doTraverse && emailOfAllGroups.hasEmail(member.Email); ok {
+			seenGroupEmails[member.Email] = struct{}{}
 
-			members, err = g.traverseGroups(ctx, email, doTraverse, seenGroupEmails, emailOfAllGroups, members)
+			log.Debugf("%s email identified as group. Requesting group information.", member.Email)
+			members, err = g.traverseGroups(ctx, member.Email, doTraverse, seenGroupEmails, emailOfAllGroups, members)
 			if err != nil {
 				return nil, err
 			}
@@ -71,15 +73,20 @@ func (g *GoogleWorkspaceClient) listAllGroupEmails(ctx context.Context, domain s
 
 // ListGoogleServiceAccounts returns list of Google Service Accounts inside Google Workspace groups.
 func (g *GoogleWorkspaceClient) ListGoogleServiceAccounts(ctx context.Context, groupEmail string) ([]GoogleServiceAccount, error) {
-	doTraverse := true
-	domainPart := groupEmail[strings.LastIndex(groupEmail, "@")+1:]
+	var (
+		doTraverse = true
+		domainPart = groupEmail[strings.LastIndex(groupEmail, "@")+1:]
+		seenGroups = make(emailSet, 100)
+		members    = make([]GoogleServiceAccount, 0, 100)
+	)
 
 	allGroupsInDomain, err := g.listAllGroupEmails(ctx, domainPart)
 	if err != nil {
 		log.Warnf("Domain %s was not found in Google Workspace, will not traverse group in group.", domainPart)
 		doTraverse = false
 	}
-	return g.traverseGroups(ctx, groupEmail, doTraverse, make(emailSet, 100), allGroupsInDomain, make([]GoogleServiceAccount, 0, 100))
+	log.Debugf("Request group %s for member information.", groupEmail)
+	return g.traverseGroups(ctx, groupEmail, doTraverse, seenGroups, allGroupsInDomain, members)
 }
 
 func (e emailSet) hasEmail(email string) bool {
