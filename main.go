@@ -12,6 +12,7 @@ import (
 	admin "google.golang.org/api/admin/directory/v1"
 	"google.golang.org/api/iamcredentials/v1"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 )
@@ -53,15 +54,26 @@ func main() {
 	}
 	log.Info("Creating Google Cloud token service.")
 
-	jwkCache := cache.NewExpiryCache[keyfunc.Keyfunc](ctx, cfg.JwkCache.Cleaner.GoDuration())
-	tokenService, err := internal.NewGoogleTokenService(ctx, jwkCache,
+	tokenService, err := internal.NewGoogleTokenService(ctx,
+		cache.NewExpiryCache[keyfunc.Keyfunc](ctx, cfg.JwkCache.Cleaner.GoDuration()),
 		cfg.GoogleCerts.RefreshInterval.GoDuration(), cfg.Leeway.GoDuration())
 	if err != nil {
 		log.WithField("error", err).Fatal("Couldn't create Google Cloud token service.")
 	}
 	log.Info("Creating Google Cloud authenticator service.")
+
+	excludedHosts := make([]url.URL, 0, len(cfg.ExcludedHosts))
+	for _, host := range cfg.ExcludedHosts {
+		excludedHost, err := url.Parse(host)
+		if err != nil {
+			log.WithField("error", err).Fatalf("Couldn't parse excluded host url %s.", host)
+		}
+		excludedHosts = append(excludedHosts, *excludedHost)
+	}
+
 	authenticator, err := internal.NewGoogleCloudTokenAuthenticator(tokenService,
-		cache.NewExpiryCache[internal.UserID](ctx, cfg.JwtCache.Cleaner.GoDuration()), iamClient, gwsClient)
+		cache.NewExpiryCache[internal.GoogleServiceAccount](ctx, cfg.JwtCache.Cleaner.GoDuration()),
+		iamClient, gwsClient, excludedHosts)
 	if err != nil {
 		log.WithField("error", err).Fatal("Couldn't create Google Cloud authenticator service.")
 	}
@@ -79,7 +91,7 @@ func main() {
 		}
 		cert, err := os.ReadFile(cfg.Tls.CertFile)
 		if err != nil {
-			log.WithField("error", err).Fatalf("Not possible to read certificate key file.")
+			log.WithField("error", err).Fatal("Not possible to read certificate key file.")
 		}
 		go func() {
 			if err = authService.ListenAndServeWithTLS(ctx, pKey, cert); err != nil && !errors.Is(http.ErrServerClosed, err) {

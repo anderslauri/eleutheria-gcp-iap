@@ -56,7 +56,7 @@ func newAuthServiceListenerWithClient(ctx context.Context, tlsMode bool) (*AuthS
 	}
 	log.Info("Creating Google Cloud authenticator service.")
 	authenticator, err := NewGoogleCloudTokenAuthenticator(tokenService,
-		cache.NewExpiryCache[UserID](ctx, 1*time.Minute), iamClient, gwsClient)
+		cache.NewExpiryCache[GoogleServiceAccount](ctx, 1*time.Minute), iamClient, gwsClient, nil)
 	if err != nil {
 		log.WithField("error", err).Fatal("Couldn't create Google Cloud authenticator service.")
 		return nil, nil, err

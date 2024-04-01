@@ -19,22 +19,24 @@ type Authenticator interface {
 
 // GoogleCloudTokenAuthenticator is an implementation of Authenticator interface.
 type GoogleCloudTokenAuthenticator struct {
-	token     TokenVerifier[*GoogleTokenClaims]
-	iamClient IdentityAccessManagementReader
-	gwsClient GoogleWorkspaceClientReader
-	cache     cache.Cache[string, cache.ExpiryCacheValue[UserID]]
+	token         TokenVerifier[*GoogleTokenClaims]
+	iamClient     IdentityAccessManagementReader
+	gwsClient     GoogleWorkspaceClientReader
+	cache         cache.Cache[string, cache.ExpiryCacheValue[GoogleServiceAccount]]
+	excludedHosts []url.URL
 }
 
 // ErrInvalidGoogleCloudAuthentication is given as a general error when Authenticate(...) is not successful.
 var ErrInvalidGoogleCloudAuthentication = errors.New("invalid google cloud authentication")
 
 // NewGoogleCloudTokenAuthenticator returns an implementation of interface Authenticator
-func NewGoogleCloudTokenAuthenticator(v TokenVerifier[*GoogleTokenClaims], c cache.Cache[string, cache.ExpiryCacheValue[UserID]], i IdentityAccessManagementReader, g GoogleWorkspaceClientReader) (*GoogleCloudTokenAuthenticator, error) {
+func NewGoogleCloudTokenAuthenticator(v TokenVerifier[*GoogleTokenClaims], c cache.Cache[string, cache.ExpiryCacheValue[GoogleServiceAccount]], i IdentityAccessManagementReader, g GoogleWorkspaceClientReader, e []url.URL) (*GoogleCloudTokenAuthenticator, error) {
 	return &GoogleCloudTokenAuthenticator{
-		token:     v,
-		iamClient: i,
-		gwsClient: g,
-		cache:     c,
+		token:         v,
+		iamClient:     i,
+		gwsClient:     g,
+		cache:         c,
+		excludedHosts: e,
 	}, nil
 }
 
@@ -44,9 +46,16 @@ func (g *GoogleCloudTokenAuthenticator) Authenticate(ctx context.Context, creden
 		aud       = fmt.Sprintf("%s://%s", requestUrl.Scheme, requestUrl.Host)
 		now       = time.Now().Unix()
 		tokenHash = fmt.Sprintf("%s:%s", credentials, aud)
-		email     UserID
+		email     GoogleServiceAccount
 		claims    *GoogleTokenClaims
 	)
+
+	for _, host := range g.excludedHosts {
+		if host.Host == aud {
+			log.Warningf("Host %s is excluded from authentication.", host.Host)
+			return nil
+		}
+	}
 	hasher := sha256.New()
 	// Verify if Google Service Account JWT is present within local cache, if found and exp is valid,
 	// jump to role binding processing as token requires no re-processing given the fully valid status.
@@ -63,16 +72,16 @@ func (g *GoogleCloudTokenAuthenticator) Authenticate(ctx context.Context, creden
 		log.WithField("error", err).Error("Failed verifying token.")
 		return err
 	}
-	email = UserID(claims.Email)
+	email = GoogleServiceAccount(claims.Email)
 	// Append to cache.
 	go g.cache.Set(tokenHash,
-		cache.ExpiryCacheValue[UserID]{
+		cache.ExpiryCacheValue[GoogleServiceAccount]{
 			Val: email,
 			Exp: claims.ExpiresAt.Unix(),
 		})
 	// Identify if user has role bindings in project.
 verifyGoogleCloudPolicyBindings:
-	bindings, err := g.iamClient.IdentityAwareProxyPolicyBindingForUser(email)
+	bindings, err := g.iamClient.LoadBindingForGoogleServiceAccount(email)
 	if err != nil {
 		log.WithField("error", err).Warningf("No policy role binding found for user %s.", email)
 		return err
