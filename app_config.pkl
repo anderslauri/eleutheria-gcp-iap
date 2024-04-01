@@ -25,4 +25,4 @@ iamPolicy {
   refreshInterval = 5.min
 }
 
-excludedHosts = new Listing<string>{"https://myurl.com"}
+excludedHosts = new Listing<string>{""}

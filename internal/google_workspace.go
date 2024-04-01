@@ -45,7 +45,7 @@ func (g *GoogleWorkspaceClient) traverseGroups(ctx context.Context, email string
 		} else if ok = doTraverse && emailOfAllGroups.hasEmail(member.Email); ok {
 			seenGroupEmails[member.Email] = struct{}{}
 
-			log.Debugf("%s email identified as group. Requesting group information.", member.Email)
+			log.Debugf("%s email identified as group within group %s. Requesting group information.", member.Email, email)
 			members, err = g.traverseGroups(ctx, member.Email, doTraverse, seenGroupEmails, emailOfAllGroups, members)
 			if err != nil {
 				return nil, err

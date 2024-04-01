@@ -109,10 +109,9 @@ Kubernetes health endpoint for liveness and readiness. Return code `200 OK`.
 ## Future changes
 This is what is in scope for `open-iap`.
 
-1. Decouple `listener` and `auth`. Required for enablement of `HTTP`, `HTTPS` and `TUNNEL`-proxy.
-2. Support role `roles/iap.tunnelResourceAccessor` for `TUNNEL`-proxy. Enablement of TCP-proxy.
-3. Role bindings on project level are only used. Folders and organization must be implemented as optional feature.
-4. Consume `IAM Role Audit Events`. Ensuring close to real time changes to policy bindings.
+1. Support role `roles/iap.tunnelResourceAccessor` for `TUNNEL`-proxy. Enablement of TCP-proxy.
+2. Role bindings on project level are only used. Folders and organization must be implemented as optional feature.
+3. Consume `IAM Role Audit Events`. Ensuring close to real time changes to policy bindings.
 
 [Google Workspace Groups API]: <https://developers.google.com/admin-sdk/directory/reference/rest/v1/groups> "Google Workspace Groups API"
 [Google Workspace Administrator Roles]: <https://support.google.com/a/answer/2405986> "Google Workspace Administrator Roles"
