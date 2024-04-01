@@ -107,9 +107,9 @@ global-auth-url: http://<service name>.<namespace>:8080/auth
 Kubernetes health endpoint for liveness and readiness. Return code `200 OK`.
 
 ## Future changes
-This is what is in scope for `open-iap`.
+In scope for `open-iap`.
 
-1. Support role `roles/iap.tunnelResourceAccessor` for `TUNNEL`-proxy. Enablement of TCP-proxy.
+1. Role `roles/iap.tunnelResourceAccessor` for `TUNNEL`-proxy.
 2. Role bindings on project level are only used. Folders and organization must be implemented as optional feature.
 3. Consume `IAM Role Audit Events`. Ensuring close to real time changes to policy bindings.
 
